@@ -75,6 +75,9 @@ char pwdAP[] = "toTheM00n";  // password of the device
 #define LED_PIN_UP D3
 #define LED_PIN_DOWN D5
 
+// Buzzer
+#define BUZZER_PIN D0
+
 // Have tested up to 10, can probably do more
 #define MAX_HOLDINGS 10
 
@@ -86,7 +89,7 @@ float LEDthreshold = 0.05; // percent
 // We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
 unsigned long screenChangeDelay = 10000; // milis
 String currency = "eur"; // in 3-char format like eur, gbp, usd
-float BuzzerThreshold; // percent
+float buzzerThreshold; // percent
 // Selected crypto currecnies by user to show on display stored in SPIFFS (in format btcethltc etc.)
 String selectedCryptos = "btc";
 
@@ -98,6 +101,7 @@ WiFiClientSecure clientSSL;
 CoinBaseProApi api(clientSSL);
 
 const char* PARAM_LEDTHRESHOLD = "inputLEDthreshold";
+const char* PARAM_BUZZERTHRESHOLD = "inputBuzzerThreshold";
 const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
 const char* PARAM_CURRENCY = "inputCurrency";
 
@@ -141,6 +145,9 @@ String processor(const String& var){
   //Serial.println(var);
   if(var == "inputLEDthreshold"){
     return readFile(SPIFFS, "/inputLEDthreshold.txt");
+  }
+  if(var == "inputBuzzerThreshold"){
+    return readFile(SPIFFS, "/inputBuzzerThreshold.txt");
   }
   for (int i = 0; i < CRYPTO_COUNT; i++) {
     if(var == "crypto" + String(i) and selectedCryptos.indexOf(cryptos[i]) > -1){
@@ -207,7 +214,8 @@ void setup() {
   cryptos[1]="eth";
   cryptos[2]="ltc";
   
-  LEDthreshold = readFile(SPIFFS, "/inputLEDthreshold.txt").toFloat() ;
+  LEDthreshold = readFile(SPIFFS, "/inputLEDthreshold.txt").toFloat();
+  buzzerThreshold = readFile(SPIFFS, "/inputBuzzerThreshold.txt").toFloat();
   // data from text file in format "btcethltc" etc., 1 crypto = 3 characters
   selectedCryptos = readFile(SPIFFS, "/inputCrypto.txt");
   screenChangeDelay = readFile(SPIFFS, "/inputScreenChangeDelay.txt").toInt();
@@ -219,6 +227,7 @@ void setup() {
   
   pinMode(LED_PIN_DOWN, OUTPUT);
   pinMode(LED_PIN_UP, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
   
   // Initialising the display
   display.init();
@@ -234,28 +243,26 @@ void setup() {
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wm;
   //reset saved settings - testing purpose
-  //wifiManager.resetSettings();
+  //wm.resetSettings();
   //fetches ssid and pass from eeprom and tries to connect
   //if it does not connect it starts an access point with the specified name
   //automatically connect using saved credentials if they exist
-  //If connection fails it starts an access point with the specified name
-  if(wm.autoConnect(ssidAP, pwdAP)){
+  //If connection fails it starts an access point with the specified name   
+  Serial.println("Configportal running");
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(0, 0, F("Connect using wifi"));
+  display.drawString(0, 11, "SSID:");
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(0, 22, ssidAP);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(0, 37, "pass:");
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(0, 48, pwdAP);
+  display.display();   
+  if (wm.autoConnect(ssidAP, pwdAP)) {
     Serial.println("connected...yeey :)");
-  }
-  else {
-    Serial.println("Configportal running");
-    display.clear();
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 0, F("Connect using wifi"));
-    display.drawString(0, 11, "SSID:");
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 22, ssidAP);
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 37, "pass:");
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 48, pwdAP);
-    display.display();
   }
   
 //  // Set WiFi to station mode and disconnect from an AP if it was Previously
@@ -301,6 +308,10 @@ void setup() {
     if (request->hasParam(PARAM_LEDTHRESHOLD)) {
       inputMessage = request->getParam(PARAM_LEDTHRESHOLD)->value();
       writeFile(SPIFFS, "/inputLEDthreshold.txt", inputMessage.c_str());
+    }
+    else if (request->hasParam(PARAM_BUZZERTHRESHOLD)) {
+      inputMessage = request->getParam(PARAM_BUZZERTHRESHOLD)->value();
+      writeFile(SPIFFS, "/inputBuzzerThreshold.txt", inputMessage.c_str());
     }
     else if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
       inputMessage = request->getParam(PARAM_SCREENCHANGEDELAY)->value();
@@ -382,38 +393,69 @@ void displayHolding(int index) {
   display.setFont(ArialMT_Plain_10);
   display.drawString(64, 48, "L:" + String(response.low, 0) + ", H:" + String(response.high, 0));
   display.display();
-  blinkLED(index);
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - LEDthreshold / 100.0))) {
+    LEDdown();
+  }
+  if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + LEDthreshold / 100.0))) {
+    LEDup();
+  }
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - buzzerThreshold / 100.0))) {
+    buzzerDown();
+  }
+  if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + buzzerThreshold / 100.0))) {
+    buzzerUp();
+  }
 }
 
-void blinkLED(int index){
-  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - LEDthreshold / 100.0))) {  
-    // Flash LED
-    digitalWrite(LED_PIN_DOWN, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_DOWN, LOW);
-    delay(150);
-    digitalWrite(LED_PIN_DOWN, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_DOWN, LOW);
-    delay(150);
-    digitalWrite(LED_PIN_DOWN, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_DOWN, LOW);
-  }
-  if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + LEDthreshold / 100.0))) {  
-    // Flash LED
-    digitalWrite(LED_PIN_UP, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_UP, LOW); 
-    delay(150);
-    digitalWrite(LED_PIN_UP, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_UP, LOW);
-    delay(150);
-    digitalWrite(LED_PIN_UP, HIGH);
-    delay(150);
-    digitalWrite(LED_PIN_UP, LOW);
-  }
+void LEDdown(){    
+  // Flash LED
+  digitalWrite(LED_PIN_DOWN, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_DOWN, LOW);
+  delay(150);
+  digitalWrite(LED_PIN_DOWN, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_DOWN, LOW);
+  delay(150);
+  digitalWrite(LED_PIN_DOWN, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_DOWN, LOW);
+}
+void LEDup(){    
+  // Flash LED
+  digitalWrite(LED_PIN_UP, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_UP, LOW); 
+  delay(150);
+  digitalWrite(LED_PIN_UP, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_UP, LOW);
+  delay(150);
+  digitalWrite(LED_PIN_UP, HIGH);
+  delay(150);
+  digitalWrite(LED_PIN_UP, LOW);
+}
+
+void buzzerDown(){    
+  // Flash LED
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(150);
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(150);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(150);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+void buzzerUp(){    
+  // Flash LED
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(300);
+  digitalWrite(BUZZER_PIN, LOW); 
+  delay(150);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(300);
+  digitalWrite(BUZZER_PIN, LOW);
 }
 
 void displayMessage(String message){
