@@ -78,20 +78,21 @@ char pwdAP[] = "toTheM00n";  // password of the device
 // Buzzer
 #define BUZZER_PIN D0
 
+// Battery
+#define BATTERY_PIN A0
+
 // Have tested up to 10, can probably do more
 #define MAX_HOLDINGS 10
 
-// You also need to define a variable to hold the previous price and the threshold of amount of change we need to flash the LED
-double previousValue = 0.0;
-float LEDthreshold = 0.05; // percent
+float LEDthreshold; // percent
 // We'll request a new value just before we change the screen so it's the most up to date
 // Rate Limits: https://docs.pro.coinbase.com/#rate-limits
 // We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
-unsigned long screenChangeDelay = 10000; // milis
-String currency = "eur"; // in 3-char format like eur, gbp, usd
+unsigned long screenChangeDelay; // milis
+String currency; // in 3-char format like eur, gbp, usd
 float buzzerThreshold; // percent
 // Selected crypto currecnies by user to show on display stored in SPIFFS (in format btcethltc etc.)
-String selectedCryptos = "btc";
+String selectedCryptos;
 
 #define CRYPTO_COUNT 3
 // Available crypto currecnies
@@ -228,14 +229,18 @@ void setup() {
   pinMode(LED_PIN_DOWN, OUTPUT);
   pinMode(LED_PIN_UP, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BATTERY_PIN, INPUT);
   
   // Initialising the display
   display.init();
   display.flipScreenVertically();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 5, F("#HODL"));
-  display.drawString(64, 34, F("Display"));
+  display.drawString(64, 3, F("#HODL"));
+  display.drawString(64, 31, F("Display"));
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(128, 50, F("v1.0"));
   display.display();
   delay(3000);
 
@@ -287,12 +292,12 @@ void setup() {
 
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_10);
+  display.setFont(ArialMT_Plain_16);
   display.drawString(64, 0, F("Connect to"));
   display.setFont(ArialMT_Plain_24);
   display.drawString(64, 18, ip.toString());
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(64, 50, F("for configuration"));
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(64, 45, F("for config"));
   display.display();
   //ipAddressString = ip.toString();
 
@@ -383,15 +388,20 @@ void displayHolding(int index) {
   crypto.toUpperCase();
   // c++ formatting not using String
   char percent_change_24h[6];
-  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", (response.last / response.open - 1) * 100);
+  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", (response.price / response.open - 1) * 100);
   display.drawString(64, 0, crypto + currency + " " + percent_change_24h + "%");
   display.setFont(ArialMT_Plain_24);
-  double price = response.last;
+  float price = (float)response.price;
   holdings[index].oldPrice = holdings[index].newPrice;
   holdings[index].newPrice = price;
   display.drawString(64, 20, formatCurrency(price));
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(64, 48, "L:" + String(response.low, 0) + ", H:" + String(response.high, 0));
+  //display.drawString(64, 48, "L:" + String(response.low, 0) + ", H:" + String(response.high, 0) + ", B:" + batteryCharge() + "V");
+  display.drawString(0, 45, "L:" + String(response.low, 0));  
+  display.drawString(0, 54, "H:" + String(response.high, 0));
+  display.drawString(50, 45, "vol:" + formatVolume(response.volume_24h));  
+  display.drawString(95, 54, String(batteryCharge()) + "V");
   display.display();
   if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - LEDthreshold / 100.0))) {
     LEDdown();
@@ -412,39 +422,34 @@ void LEDdown(){
   digitalWrite(LED_PIN_DOWN, HIGH);
   delay(150);
   digitalWrite(LED_PIN_DOWN, LOW);
-  delay(150);
-  digitalWrite(LED_PIN_DOWN, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_DOWN, LOW);
-  delay(150);
-  digitalWrite(LED_PIN_DOWN, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_DOWN, LOW);
 }
 void LEDup(){    
   // Flash LED
   digitalWrite(LED_PIN_UP, HIGH);
   delay(150);
   digitalWrite(LED_PIN_UP, LOW); 
-  delay(150);
-  digitalWrite(LED_PIN_UP, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_UP, LOW);
-  delay(150);
-  digitalWrite(LED_PIN_UP, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_UP, LOW);
 }
 
 void buzzerDown(){    
   // Flash LED
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(150);
-  digitalWrite(BUZZER_PIN, LOW);
-  delay(150);
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(150);
-  digitalWrite(BUZZER_PIN, LOW);
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(100);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(200);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(100);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
 }
 
 void buzzerUp(){    
@@ -452,7 +457,7 @@ void buzzerUp(){
   digitalWrite(BUZZER_PIN, HIGH);
   delay(300);
   digitalWrite(BUZZER_PIN, LOW); 
-  delay(150);
+  delay(300);
   digitalWrite(BUZZER_PIN, HIGH);
   delay(300);
   digitalWrite(BUZZER_PIN, LOW);
@@ -469,27 +474,76 @@ void displayMessage(String message){
 String formatCurrency(float price) {
 //  String formattedCurrency = CURRENCY_SYMBOL;
   String formattedCurrency = "";
-  int pointsAfterDecimal = 6;
-  if (price > 10000) {
+  int pointsAfterDecimal;
+  if (price > 1000) {
     pointsAfterDecimal = 0;
   } else if (price > 100) {
-    pointsAfterDecimal = 2;
-  } else if (price > 1) {
+    pointsAfterDecimal = 1;
+  } else if (price >= 1) {
     pointsAfterDecimal = 4;
+  } else {
+    pointsAfterDecimal = 6;
   }
   formattedCurrency.concat(String(price, pointsAfterDecimal));
   return formattedCurrency;
+}
+
+String formatVolume(float volume) {
+  if (volume > 999) {
+    return String(volume/1000.0, 1) + "k";
+  } else if (volume > 999999) {
+    return String(volume/1000000.0, 1) + "M";
+  }
 }
 
 bool loadDataForHolding(int index) {
   int nextIndex = getNextIndex();
   if (nextIndex > -1 ) {
     holdings[index].lastResponse = api.GetTickerInfo(holdings[index].tickerId, currency);
-    Serial.println("nextIndex: " + String(holdings[index].lastResponse.error));
+    //Serial.println("nextIndex: " + String(holdings[index].lastResponse.error));
     return holdings[index].lastResponse.error == "";
   }
 
   return false;
+}
+
+float batteryCharge() {
+  unsigned int raw=0;
+  float voltage=0.0;
+//  float voltageMatrix[22][2] = {
+//    {4.2,  100},
+//    {4.15, 95},
+//    {4.11, 90},
+//    {4.08, 85},
+//    {4.02, 80},
+//    {3.98, 75},
+//    {3.95, 70},
+//    {3.91, 65},
+//    {3.87, 60},
+//    {3.85, 55},
+//    {3.84, 50},
+//    {3.82, 45},
+//    {3.80, 40},
+//    {3.79, 35},
+//    {3.77, 30},
+//    {3.75, 25},
+//    {3.73, 20},
+//    {3.71, 15},
+//    {3.69, 10},
+//    {3.61, 5},
+//    {3.27, 0},
+//    {0, 0}};
+  raw = analogRead(BATTERY_PIN);
+  // Wemos D1 Internal Voltage divider (220kOhm+100kOhm) and Wemos battery shield is used with J2 jumper soldered (130kOhm)
+  // 4.5V is maximum LiPo battery voltage
+  // due to voltage measurements constant is added
+  voltage=raw/1023.0*4.5*0.97;
+  return (voltage < 2 ? 0.0 : voltage);
+//  for(int i=20; i>=0; i--) {
+//    if(voltageMatrix[i][0] >= voltage) {
+//      return (int) voltageMatrix[i + 1][1];
+//    }
+//  }
 }
 
 void loop() {

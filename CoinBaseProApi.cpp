@@ -60,21 +60,23 @@ String CoinBaseProApi::SendGetToCoinBasePro(String command) {
 
 CMCTickerResponse CoinBaseProApi::GetTickerInfo(String coinId, String currency) {
   // https://api.pro.coinbase.com/products/btc-eur/stats
-  String command="/products/" + coinId + "-" + currency + "/stats";
-//  if (currency != "") {
-//    command = command + "?convert=" + currency;
-//  }
+  // https://api.pro.coinbase.com/products/btc-eur/ticker
+  String commandStats="/products/" + coinId + "-" + currency + "/stats";
+  String commandTicker="/products/" + coinId + "-" + currency + "/ticker";
 
   // Serial.println(command);
-  String response = SendGetToCoinBasePro(command);
+  String responseStats = SendGetToCoinBasePro(commandStats);
+  String responseTicker = SendGetToCoinBasePro(commandTicker);
   CMCTickerResponse responseObject = CMCTickerResponse();
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<256> stats;
+  StaticJsonDocument<256> ticker;
   
   // Deserialize the JSON document
-  DeserializationError error = deserializeJson(doc, response);
+  DeserializationError errorStats = deserializeJson(stats, responseStats);
+  DeserializationError errorTicker = deserializeJson(ticker, responseTicker);
   
   // Test if parsing succeeds.
-  if (error) {
+  if (errorStats || errorTicker) {
     responseObject.error = "deserializeJson() failed: " + String("error.f_str()");
 //    Serial.print(F("deserializeJson() failed: "));
 //    Serial.println(error.f_str());
@@ -87,36 +89,15 @@ CMCTickerResponse CoinBaseProApi::GetTickerInfo(String coinId, String currency) 
   // In other case, you can do doc["time"].as<long>();
   // const char* sensor = doc["sensor"];
 
-//    {"open":"40680","high":"40789.98","low":"36445","volume":"3771.22613578","last":"39082.37","volume_30day":"102943.0112141"}
-      responseObject.open = doc["open"].as<double>();
-      responseObject.high = doc["high"].as<double>();
-      responseObject.low = doc["low"].as<double>();
-      responseObject.volume = doc["volume"].as<double>();
-      responseObject.last = doc["last"].as<double>();
-      responseObject.volume_30day = doc["volume_30day"].as<double>();
-
-      
-//    responseObject.id = root[0]["id"].as<String>();
-//    responseObject.name = root[0]["name"].as<String>();
-//    responseObject.symbol = root[0]["symbol"].as<String>();
-//    responseObject.rank = root[0]["rank"].as<int>();
-//    responseObject.price_usd = root[0]["price_usd"].as<double>();
-//
-//    responseObject.price_btc = root[0]["price_btc"].as<double>();
-//    responseObject.volume_usd_24h = root[0]["24h_volume_usd"].as<double>();
-//    responseObject.market_cap_usd = root[0]["market_cap_usd"].as<double>();
-//    responseObject.available_supply = root[0]["available_supply"].as<double>();
-//    responseObject.total_supply = root[0]["total_supply"].as<double>();
-//
-//    responseObject.percent_change_1h = root[0]["percent_change_1h"].as<double>();
-//    responseObject.percent_change_24h = root[0]["percent_change_24h"].as<double>();
-//    responseObject.percent_change_7d = root[0]["percent_change_7d"].as<double>();
-//    responseObject.last_updated = root[0]["last_updated"].as<double>();
-
-//    currency.toLowerCase();
-//    responseObject.price_currency = root[0]["price_" + currency].as<double>();
-//    responseObject.volume_currency_24h = root[0]["volume_" + currency + "_24h"].as<double>();
-//    responseObject.market_cap_currency = root[0]["market_cap_" + currency].as<double>();
+//    /stats: {"open":"40680","high":"40789.98","low":"36445","volume":"3771.22613578","last":"39082.37","volume_30day":"102943.0112141"}
+//    /ticker: {"trade_id":41905060,"price":"47892.67","size":"0.00201603","time":"2021-05-05T16:52:24.740835Z","bid":"47885.33","ask":"47892.67","volume":"2016.48486351"}
+      responseObject.open = stats["open"].as<float>();
+      responseObject.high = stats["high"].as<float>();
+      responseObject.low = stats["low"].as<float>();
+      responseObject.volume_24h = stats["volume"].as<float>();
+      responseObject.last = stats["last"].as<float>();
+      responseObject.volume_30day = stats["volume_30day"].as<float>();
+      responseObject.price = ticker["price"].as<float>();
 
   return responseObject;
 }
