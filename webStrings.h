@@ -57,6 +57,13 @@ const char index_html[] PROGMEM = "<html lang='en'><head>"
 "<option value='usd' %usd%>USD</option>"
 "<option value='gbp' %gbp%>GBP</option></select></div>"
 "<input type='submit' value='Save' onclick='submitMessage()' class='btn btn-primary mb-2'></form>"
+/*"<h5>Display</h5>"
+"<form action='/get' target='hidden-form' class='form-inline'>"
+"<div class='form-group mb-2'>"
+"<label for='inputDispBrightness' class='col-form-label'>Brightness</label></div>"
+"<div class='form-group mb-2 mx-sm-3'>"
+"<input type='number' name='inputLEDthreshold' step='10' min='10' max='100' value='%inputDispBrightness%' class='form-control'></div>"
+"<button type='submit' onclick='submitMessage()' class='btn btn-primary mb-2'>Save</button></form>"*/
 "<iframe style='display:none' name='hidden-form'></iframe></div></body></html>";
 
 #endif

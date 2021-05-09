@@ -29,6 +29,7 @@
 // Reused CoinMarketCapApi
 
 #include "webStrings.h"
+#include "graphic_oledi2c.h"
 
 #include "SH1106.h"
 // The driver for the OLED display
@@ -89,10 +90,15 @@ float LEDthreshold; // percent
 // Rate Limits: https://docs.pro.coinbase.com/#rate-limits
 // We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
 unsigned long screenChangeDelay; // milis
+unsigned long screenChangeDue;
 String currency; // in 3-char format like eur, gbp, usd
 float buzzerThreshold; // percent
 // Selected crypto currecnies by user to show on display stored in SPIFFS (in format btcethltc etc.)
 String selectedCryptos;
+//int dispBrightness;
+float batVoltage;
+unsigned long batVreadDelay = 60000;
+unsigned long batVreadDue;
 
 #define CRYPTO_COUNT 3
 // Available crypto currecnies
@@ -105,6 +111,7 @@ const char* PARAM_LEDTHRESHOLD = "inputLEDthreshold";
 const char* PARAM_BUZZERTHRESHOLD = "inputBuzzerThreshold";
 const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
 const char* PARAM_CURRENCY = "inputCurrency";
+//const char* PARAM_DISPBRIGHTNESS = "inputDispBrightness";
 
 void notFound(AsyncWebServerRequest *request) {
   request->send(404, "text/plain", "Not found");
@@ -144,12 +151,15 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
 // it looks for variables in format %var_name%
 String processor(const String& var){
   //Serial.println(var);
-  if(var == "inputLEDthreshold"){
+  if(var == PARAM_LEDTHRESHOLD){
     return readFile(SPIFFS, "/inputLEDthreshold.txt");
   }
-  if(var == "inputBuzzerThreshold"){
+  if(var == PARAM_BUZZERTHRESHOLD){
     return readFile(SPIFFS, "/inputBuzzerThreshold.txt");
   }
+/*  if(var == PARAM_DISPBRIGHTNESS){
+    return readFile(SPIFFS, "/inputDispBrightness.txt");
+  }*/
   for (int i = 0; i < CRYPTO_COUNT; i++) {
     if(var == "crypto" + String(i) and selectedCryptos.indexOf(cryptos[i]) > -1){
       return "checked";
@@ -169,8 +179,6 @@ String processor(const String& var){
 }
 
 SH1106 display(0x3c, SDA_PIN, SCL_PIN);
-
-unsigned long screenChangeDue;
 
 struct Holding {
   String tickerId;
@@ -198,6 +206,26 @@ void addNewHolding(String tickerId, float newPrice = 0, float oldPrice = 0) {
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
+  pinMode(LED_PIN_DOWN, OUTPUT);
+  pinMode(LED_PIN_UP, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BATTERY_PIN, INPUT);
+
+  // Initialising the display
+  display.init();
+  display.flipScreenVertically();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  //display.setBrightness(dispBrightness);
+  
+  batVoltage = batteryVoltage();
+  if (batVoltage > 2.0 && batVoltage < 3.3) {
+    display.drawXbm(47, 12, BATTERY_0_3_WIDTH, BATTERY_0_3_HEIGHT, battery_0_3);
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(64, 37, F("low battery"));
+    display.display();
+    delay(5000);
+    ESP.deepSleep(0);
+  }
 
   // Initialize SPIFFS
   #ifdef ESP32
@@ -220,21 +248,14 @@ void setup() {
   // data from text file in format "btcethltc" etc., 1 crypto = 3 characters
   selectedCryptos = readFile(SPIFFS, "/inputCrypto.txt");
   screenChangeDelay = readFile(SPIFFS, "/inputScreenChangeDelay.txt").toInt();
+  //dispBrightness = readFile(SPIFFS, "/inputDispBrightness.txt").toInt();
   currency = readFile(SPIFFS, "/inputCurrency.txt");
 
   for (int i = 0; i < selectedCryptos.length(); i += 3) {
     addNewHolding(selectedCryptos.substring(i, i + 3));
   }
-  
-  pinMode(LED_PIN_DOWN, OUTPUT);
-  pinMode(LED_PIN_UP, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(BATTERY_PIN, INPUT);
-  
-  // Initialising the display
-  display.init();
-  display.flipScreenVertically();
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
+
+  display.clear();
   display.setFont(ArialMT_Plain_24);
   display.drawString(64, 3, F("#HODL"));
   display.drawString(64, 31, F("Display"));
@@ -326,6 +347,10 @@ void setup() {
       inputMessage = request->getParam(PARAM_CURRENCY)->value();
       writeFile(SPIFFS, "/inputCurrency.txt", inputMessage.c_str());
     }
+    /*else if (request->hasParam(PARAM_DISPBRIGHTNESS)) {
+      inputMessage = request->getParam(PARAM_DISPBRIGHTNESS)->value();
+      writeFile(SPIFFS, "/inputDispBrightness.txt", inputMessage.c_str());
+    }*/
     else {
       for (int i = 0; i < CRYPTO_COUNT; i++) {
         String param = "crypto" + String(i);
@@ -397,22 +422,34 @@ void displayHolding(int index) {
   display.drawString(64, 20, formatCurrency(price));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  //display.drawString(64, 48, "L:" + String(response.low, 0) + ", H:" + String(response.high, 0) + ", B:" + batteryCharge() + "V");
+  //display.drawString(64, 48, "L:" + String(response.low, 0) + ", H:" + String(response.high, 0) + ", B:" + batteryVoltage() + "V");
   display.drawString(0, 45, "L:" + String(response.low, 0));  
   display.drawString(0, 54, "H:" + String(response.high, 0));
   display.drawString(50, 45, "vol:" + formatVolume(response.volume_24h));  
-  display.drawString(95, 54, String(batteryCharge()) + "V");
+  display.drawString(100, 54, String(batVoltage) + "V");
+  if (batVoltage > 4.0) {
+    display.drawXbm(80, 54, BATTERY_3_3_WIDTH, BATTERY_3_3_HEIGHT, battery_3_3);
+  } else if (batVoltage > 3.6) {
+    display.drawXbm(80, 54, BATTERY_2_3_WIDTH, BATTERY_2_3_HEIGHT, battery_2_3);
+  } else if (batVoltage > 3.4) {
+    display.drawXbm(80, 54, BATTERY_1_3_WIDTH, BATTERY_1_3_HEIGHT, battery_1_3);
+  } 
+  if (holdings[index].newPrice < holdings[index].oldPrice) {
+    display.fillTriangle(100, 29, 114, 29, 107, 36);
+  } else if (holdings[index].newPrice > holdings[index].oldPrice) {
+    display.fillTriangle(100, 37, 114, 37, 107, 30);
+  }
   display.display();
   if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - LEDthreshold / 100.0))) {
     LEDdown();
   }
-  if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + LEDthreshold / 100.0))) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + LEDthreshold / 100.0))) {
     LEDup();
   }
   if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - buzzerThreshold / 100.0))) {
     buzzerDown();
   }
-  if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + buzzerThreshold / 100.0))) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + buzzerThreshold / 100.0))) {
     buzzerUp();
   }
 }
@@ -507,7 +544,7 @@ bool loadDataForHolding(int index) {
   return false;
 }
 
-float batteryCharge() {
+float batteryVoltage() {
   unsigned int raw=0;
   float voltage=0.0;
 //  float voltageMatrix[22][2] = {
@@ -556,6 +593,13 @@ void loop() {
 //  Serial.println(crypto);
 //  delay(5000);
   unsigned long timeNow = millis();
+  if (timeNow > batVreadDue) {
+    batVoltage = batteryVoltage();
+    batVreadDue = timeNow + batVreadDelay;
+  }
+  if (batVoltage > 2.0 && batVoltage < 3.4) {
+    ESP.deepSleep(0);
+  }
   if ((timeNow > screenChangeDue))  {
     currentIndex = getNextIndex();
     if (currentIndex > -1) {
