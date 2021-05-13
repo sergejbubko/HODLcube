@@ -219,12 +219,7 @@ void setup() {
   
   batVoltage = batteryVoltage();
   if (batVoltage > 2.0 && batVoltage < 3.3) {
-    display.drawXbm(47, 12, BATTERY_0_3_WIDTH, BATTERY_0_3_HEIGHT, battery_0_3);
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(64, 37, F("low battery"));
-    display.display();
-    delay(5000);
-    ESP.deepSleep(0);
+    lowBattery();
   }
 
   // Initialize SPIFFS
@@ -427,7 +422,7 @@ void displayHolding(int index) {
   display.drawString(0, 54, "H:" + String(response.high, 0));
   display.drawString(50, 45, "vol:" + formatVolume(response.volume_24h));  
   display.drawString(100, 54, String(batVoltage) + "V");
-  if (batVoltage > 4.0) {
+  if (batVoltage > 3.8) {
     display.drawXbm(80, 54, BATTERY_3_3_WIDTH, BATTERY_3_3_HEIGHT, battery_3_3);
   } else if (batVoltage > 3.6) {
     display.drawXbm(80, 54, BATTERY_2_3_WIDTH, BATTERY_2_3_HEIGHT, battery_2_3);
@@ -574,13 +569,24 @@ float batteryVoltage() {
   // Wemos D1 Internal Voltage divider (220kOhm+100kOhm) and Wemos battery shield is used with J2 jumper soldered (130kOhm)
   // 4.5V is maximum LiPo battery voltage
   // due to voltage measurements constant is added
-  voltage=raw/1023.0*4.5*0.97;
+  voltage=raw/1023.0*4.5*0.98;
   return (voltage < 2 ? 0.0 : voltage);
 //  for(int i=20; i>=0; i--) {
 //    if(voltageMatrix[i][0] >= voltage) {
 //      return (int) voltageMatrix[i + 1][1];
 //    }
 //  }
+}
+void lowBattery(void) {
+  display.clear();
+  display.drawXbm(47, 12, BATTERY_0_3_WIDTH, BATTERY_0_3_HEIGHT, battery_0_3);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(64, 37, F("low battery"));
+  display.display();
+  tone(BUZZER_PIN, 33, 500);
+  delay(5000);
+  display.displayOff();
+  ESP.deepSleep(0);
 }
 
 void loop() {
@@ -597,8 +603,8 @@ void loop() {
     batVoltage = batteryVoltage();
     batVreadDue = timeNow + batVreadDelay;
   }
-  if (batVoltage > 2.0 && batVoltage < 3.4) {
-    ESP.deepSleep(0);
+  if (batVoltage > 2.0 && batVoltage < 3.3) {
+    lowBattery();
   }
   if ((timeNow > screenChangeDue))  {
     currentIndex = getNextIndex();

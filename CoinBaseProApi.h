@@ -47,6 +47,8 @@ class CoinBaseProApi
     int Port = 443;
 
   private:
+    CMCTickerResponse responseObject;
+    unsigned long getStatsDue;
     WiFiClientSecure *client;
     void closeClient();
 };
