@@ -4,13 +4,10 @@
   "screenChangeDelay" : 5000,
   "cryptos0" : "btc-usd",
   "cryptos1" : "btc-eur",  
-  "cryptos2" : "eth-btc",  
+  "cryptos2" : "btc-eth",  
   "cryptos3" : "eth-usd",  
   "cryptos4" : "eth-eur",  
   "cryptos5" : "ltc-usd",
   "cryptos6" : "ltc-eur",
-  "cryptos7" : "ltc-btc",  
-  "cryptos8" : "xrp-usd",  
-  "cryptos9" : "xrp-eur",  
-  "cryptos10" : "xrp-btc"
+  "cryptos7" : "ltc-btc"
 }
