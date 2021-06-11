@@ -4,7 +4,7 @@
   "screenChangeDelay" : 5000,
   "cryptos0" : "btc-usd",
   "cryptos1" : "btc-eur",  
-  "cryptos2" : "btc-eth",  
+  "cryptos2" : "eth-btc",  
   "cryptos3" : "eth-usd",  
   "cryptos4" : "eth-eur",  
   "cryptos5" : "ltc-usd",
