@@ -60,10 +60,10 @@ String CoinbaseProApi::SendGetToCoinbasePro(String command) {
   return body;
 }
 
-CBPTickerResponse CoinbaseProApi::GetTickerInfo(String coinId, String currency) {
+CBPTickerResponse CoinbaseProApi::GetTickerInfo(String tickerId) {
   
   // https://api.pro.coinbase.com/products/btc-eur/ticker  
-  String commandTicker="/products/" + coinId + "-" + currency + "/ticker";
+  String commandTicker="/products/" + tickerId + "/ticker";
   
   String responseTicker = SendGetToCoinbasePro(commandTicker);
   Serial.println(responseTicker); 
@@ -89,10 +89,10 @@ CBPTickerResponse CoinbaseProApi::GetTickerInfo(String coinId, String currency) 
   return responseTickerObject;
 }
 
-CBPStatsResponse CoinbaseProApi::GetStatsInfo(String coinId, String currency) {
+CBPStatsResponse CoinbaseProApi::GetStatsInfo(String tickerId) {
 
   // https://api.pro.coinbase.com/products/btc-eur/stats
-  String commandStats="/products/" + coinId + "-" + currency + "/stats";
+  String commandStats="/products/" + tickerId + "/stats";
   
   String responseStats = SendGetToCoinbasePro(commandStats);
   Serial.println(responseStats);

@@ -28,20 +28,24 @@
 // Available on the library manager (Search for "oled ssd1306")
 // https://github.com/ThingPulse/esp8266-oled-ssd1306
 
+// https://github.com/bblanchon/ArduinoJson
 #include <ArduinoJson.h>
 // Available on the library manager (Search for "arduino json")
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+// https://github.com/me-no-dev/ESPAsyncTCP
 #include <ESPAsyncTCP.h>
 #include <Hash.h>
 #include <FS.h>
+// https://github.com/me-no-dev/ESPAsyncWebServer
 #include <ESPAsyncWebServer.h>
 
 #include <strings_en.h>
 // https://github.com/tzapu/WiFiManager/tree/feature_asyncwebserver
 #include <WiFiManager.h>        
 
+// https://github.com/datacute/DoubleResetDetector
 #include <DoubleResetDetector.h>
 
 // Pins based on your wiring
@@ -63,10 +67,10 @@
 #define BATTERY_PIN A0
 
 // Have tested up to 10, can probably do more
-#define MAX_HOLDINGS 5
+#define MAX_HOLDINGS 10
 
 // number of crypto showing in config portal
-#define CRYPTO_COUNT 3
+#define CRYPTO_COUNT 8
 
 // Number of seconds after reset during which a 
 // subseqent reset will be considered a double reset.
@@ -80,26 +84,11 @@ const char* VER = "v1.0";
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
 
-float LEDthreshold; // percent
-float buzzerThreshold; // percent
-
-// We'll request a new value just before we change the screen so it's the most up to date
-// Rate Limits: https://docs.pro.coinbase.com/#rate-limits
-// We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
-unsigned long screenChangeDelay; // milis
 unsigned long screenChangeDue;
-
-// @TODO read all currencies using line separator
-String currency; // in 3-char format like eur, gbp, usd
-// Selected crypto currecnies to display stored in SPIFFS (in format btcethltc etc.)
-String selectedCryptos;
 
 float batVoltage; // in volts
 unsigned long batVreadDelay = 60000; // in millis, reading battery voltage too often drains battery
 unsigned long batVreadDue;
-
-// Available crypto currecnies
-String cryptos[CRYPTO_COUNT];
 
 const char* PARAM_LEDTHRESHOLD = "inputLEDthreshold";
 const char* PARAM_BUZZERTHRESHOLD = "inputBuzzerThreshold";
@@ -116,6 +105,112 @@ struct Holding {
   CBPStatsResponse lastStatsResponse;
 };
 
+struct Settings {
+  float LEDthreshold; // percent
+  float buzzerThreshold;
+// We'll request a new value just before we change the screen so it's the most up to date
+// Rate Limits: https://docs.pro.coinbase.com/#rate-limits
+// We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
+  unsigned long screenChangeDelay; // milis
+  String cryptos[CRYPTO_COUNT];
+};
+
+const char *filename = "/settings.txt";
+Settings settings;                         // <- global settings object
+
+// Loads the settings from a file
+void loadSettings(const char *filename, Settings &settings) {
+  // Open file for reading
+  File file = SPIFFS.open(filename, "r");
+
+  // Allocate a temporary JsonDocument
+  // Don't forget to change the capacity to match your requirements.
+  // Use arduinojson.org/v6/assistant to compute the capacity.
+  StaticJsonDocument<512> doc;
+
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, file);
+  if (error)
+    Serial.println(F("Failed to read file, using default settings"));
+
+  // Copy values from the JsonDocument to the Config
+  settings.LEDthreshold = doc["LEDthreshold"] | 0.05;
+  settings.buzzerThreshold = doc["buzzerThreshold"] | 0.1;
+  settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
+  settings.cryptos[0] = String(doc["cryptos0"]);
+  settings.cryptos[1] = String(doc["cryptos1"]);  
+  settings.cryptos[2] = String(doc["cryptos2"]);  
+  settings.cryptos[3] = String(doc["cryptos3"]);  
+  settings.cryptos[4] = String(doc["cryptos4"]);  
+  settings.cryptos[5] = String(doc["cryptos5"]);
+  settings.cryptos[6] = String(doc["cryptos6"]);
+  settings.cryptos[7] = String(doc["cryptos7"]);  
+  
+//  strlcpy(settings.hostname,                  // <- destination
+//          doc["hostname"] | "example.com",  // <- source
+//          sizeof(settings.hostname));         // <- destination's capacity
+
+// Close the file
+  file.close();
+}
+
+// Saves the settings to a file
+void saveSettings(const char *filename, const Settings &settings) {
+  // Delete existing file, otherwise the settings is appended to the file
+  SPIFFS.remove(filename);
+
+  // Open file for writing
+  File file = SPIFFS.open(filename, "w");
+  if (!file) {
+    Serial.println(F("Failed to create file"));
+    return;
+  }
+
+  // Allocate a temporary JsonDocument
+  // Don't forget to change the capacity to match your requirements.
+  // Use arduinojson.org/assistant to compute the capacity.
+  StaticJsonDocument<384> doc;
+
+  // Set the values in the document 
+  doc["LEDthreshold"] = settings.LEDthreshold;
+  doc["buzzerThreshold"] = settings.buzzerThreshold;
+  doc["screenChangeDelay"] = settings.screenChangeDelay;  
+  doc["cryptos0"] = settings.cryptos[0];
+  doc["cryptos1"] = settings.cryptos[1];  
+  doc["cryptos2"] = settings.cryptos[2];  
+  doc["cryptos3"] = settings.cryptos[3];  
+  doc["cryptos4"] = settings.cryptos[4];  
+  doc["cryptos5"] = settings.cryptos[5];
+  doc["cryptos6"] = settings.cryptos[6];
+  doc["cryptos7"] = settings.cryptos[7];  
+  
+  // Serialize JSON to file
+  if (serializeJson(doc, file) == 0) {
+    Serial.println(F("Failed to write to file"));
+  }
+  // Close the file
+  file.close();
+}
+
+// Prints the content of a file to the Serial
+void printFile(const char *filename) {
+  // Open file for reading
+  File file = SPIFFS.open(filename, "r");
+  if (!file) {
+    Serial.println(F("Failed to read file"));
+    return;
+  }
+
+  // Extract each characters by one by one
+  while (file.available()) {
+    Serial.print((char)file.read());
+  }
+  Serial.println();
+
+  // Close the file
+  file.close();
+}
+
 int currentIndex = -1;
 
 AsyncWebServer server(80);
@@ -130,61 +225,23 @@ void notFound(AsyncWebServerRequest *request) {
   request->send(404, "text/plain", "Not found");
 }
 
-String readFile(fs::FS &fs, const char * path){
-  Serial.printf("Reading file: %s\r\n", path);
-  File file = fs.open(path, "r");
-  if(!file || file.isDirectory()){
-    Serial.println("- empty file or failed to open file");
-    return String();
-  }
-  Serial.println("- read from file:");
-  String fileContent;
-  while(file.available()){
-    fileContent+=String((char)file.read());
-  }
-  Serial.println(fileContent);
-  return fileContent;
-}
-
-void writeFile(fs::FS &fs, const char * path, const char * message){
-  Serial.printf("Writing file: %s\r\n", path);
-  File file = fs.open(path, "w");
-  if(!file){
-    Serial.println("- failed to open file for writing");
-    return;
-  }
-  if(file.print(message)){
-    Serial.println("- file written");
-  } else {
-    Serial.println("- write failed");
-  }
-}
-
 // Replaces placeholder with stored values
 // it looks for variables in format %var_name%
 String processor(const String& var){
   //Serial.println(var);
   if(var == PARAM_LEDTHRESHOLD){
-    return readFile(SPIFFS, "/inputLEDthreshold.txt");
+    return String(settings.LEDthreshold);
   }
   if(var == PARAM_BUZZERTHRESHOLD){
-    return readFile(SPIFFS, "/inputBuzzerThreshold.txt");
+    return String(settings.buzzerThreshold);
   }
-/*  if(var == PARAM_DISPBRIGHTNESS){
-    return readFile(SPIFFS, "/inputDispBrightness.txt");
-  }*/
   for (int i = 0; i < CRYPTO_COUNT; i++) {
-    if(var == "crypto" + String(i) and selectedCryptos.indexOf(cryptos[i]) > -1){
+    if(var == settings.cryptos[i]){
       return "checked";
     }
   }
   for (int i = 0; i < 3; i++) {
-    if(var == "screenChangeDelay" + String(screenChangeDelay)){
-      return "selected";
-    }
-  }
-  for (int i = 0; i < 3; i++) {
-    if(var == currency){
+    if(var == "screenChangeDelay" + String(settings.screenChangeDelay)){
       return "selected";
     }
   }
@@ -211,12 +268,11 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 0, F("Using WIFI connect to"));
-  display.drawString(2, 11, "network SSID:");
+  display.drawStringMaxWidth(0, 0, 128, F("Connect your phone to wifi network called:"));
   display.setFont(ArialMT_Plain_16);
   display.drawString(5, 22, ssidAP);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 37, "pass:");
+  display.drawString(0, 37, F("and use password:"));
   display.setFont(ArialMT_Plain_16);
   display.drawString(5, 48, pwdAP);
   display.display();
@@ -225,6 +281,7 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
+  while (!Serial) continue;
   pinMode(LED_PIN_DOWN, OUTPUT);
   pinMode(LED_PIN_UP, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
@@ -242,8 +299,8 @@ void setup() {
 
   display.clear();
   display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 3, F("#HODL"));
-  display.drawString(64, 31, F("cube"));
+  display.drawString(64, 8, F("#HODL"));
+  display.drawString(64, 32, F("cube"));
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_10);
   display.drawString(128, 50, VER);
@@ -292,39 +349,25 @@ void setup() {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
-  
-  cryptos[0]="btc";
-  cryptos[1]="eth";
-  cryptos[2]="ltc";
-  
-  LEDthreshold = readFile(SPIFFS, "/inputLEDthreshold.txt").toFloat();
-  buzzerThreshold = readFile(SPIFFS, "/inputBuzzerThreshold.txt").toFloat();
-  // data from text file in format "btcethltc" etc., 1 crypto = 3 characters
-  selectedCryptos = readFile(SPIFFS, "/inputCrypto.txt");
-  screenChangeDelay = readFile(SPIFFS, "/inputScreenChangeDelay.txt").toInt();
-  currency = readFile(SPIFFS, "/inputCurrency.txt");
 
-  for (int i = 0; i < selectedCryptos.length(); i += 3) {
-    addNewHolding(selectedCryptos.substring(i, i + 3));
-  }
+  // Should load default config if run for the first time
+  Serial.println(F("Loading settings..."));
+  loadSettings(filename, settings);
+
+  // Create settings file
+  Serial.println(F("Saving settings..."));
+  saveSettings(filename, settings);
+
+  // Dump config file
+  Serial.println(F("Print config file..."));
+  printFile(filename);
   
-//  // Set WiFi to station mode and disconnect from an AP if it was Previously
-//  // connected
-//  WiFi.mode(WIFI_STA);
-//  WiFi.disconnect();
-//  delay(100);
-//
-//  // Attempt to connect to Wifi network:
-//  Serial.print("Connecting Wifi: ");
-//  Serial.println(ssid);
-//  WiFi.begin(ssid, password);
-//  while (WiFi.status() != WL_CONNECTED) {
-//    Serial.print(".");
-//    delay(500);
-//  }
-//  Serial.println("");
-//  Serial.println("WiFi connected");
-//  Serial.println("IP address: ");
+  for (int i = 0; i < CRYPTO_COUNT; i++) {
+    if (settings.cryptos[i] != "null") {    
+      Serial.println("Added: " + settings.cryptos[i]);
+      addNewHolding(settings.cryptos[i]);
+    }
+  }
   IPAddress ip = WiFi.localIP();
 //  Serial.println(ip);
 
@@ -347,36 +390,27 @@ void setup() {
     String inputMessage = "";
     // GET inputLEDthreshold value on <ESP_IP>/get?inputLEDthreshold=<inputMessage>
     if (request->hasParam(PARAM_LEDTHRESHOLD)) {
-      inputMessage = request->getParam(PARAM_LEDTHRESHOLD)->value();
-      writeFile(SPIFFS, "/inputLEDthreshold.txt", inputMessage.c_str());
+      settings.LEDthreshold = (float)request->getParam(PARAM_LEDTHRESHOLD)->value().toFloat();
     }
-    else if (request->hasParam(PARAM_BUZZERTHRESHOLD)) {
-      inputMessage = request->getParam(PARAM_BUZZERTHRESHOLD)->value();
-      writeFile(SPIFFS, "/inputBuzzerThreshold.txt", inputMessage.c_str());
+    if (request->hasParam(PARAM_BUZZERTHRESHOLD)) {
+      settings.buzzerThreshold = request->getParam(PARAM_BUZZERTHRESHOLD)->value().toFloat();
     }
-    else if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
-      inputMessage = request->getParam(PARAM_SCREENCHANGEDELAY)->value();
-      writeFile(SPIFFS, "/inputScreenChangeDelay.txt", inputMessage.c_str());
+    if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
+      settings.screenChangeDelay = (long)request->getParam(PARAM_SCREENCHANGEDELAY)->value().toInt();
     }
-    else if (request->hasParam(PARAM_CURRENCY)) {
-      inputMessage = request->getParam(PARAM_CURRENCY)->value();
-      writeFile(SPIFFS, "/inputCurrency.txt", inputMessage.c_str());
-    }
-    else {
-      for (int i = 0; i < CRYPTO_COUNT; i++) {
-        String param = "crypto" + String(i);
-        if (request->hasParam(param)) {
-          inputMessage += request->getParam(param)->value();
-        }
-      }
-      if (inputMessage != "") {
-        writeFile(SPIFFS, "/inputCrypto.txt", inputMessage.c_str());
+    for (int i = 0; i < CRYPTO_COUNT; i++) {
+      String param = "crypto" + String(i);
+      if (request->hasParam(param)) {
+        settings.cryptos[i] = request->getParam(param)->value();
       }
     }
-//    else {
-//      inputMessage = "No message sent";
-//    }
-    Serial.println(inputMessage);
+    Serial.println(F("Saving configuration..."));
+    saveSettings(filename, settings);
+    
+    // Dump config file
+    Serial.println(F("Print config file..."));
+    printFile(filename);
+    
     request->send(200, "text/text", inputMessage);
     ESP.restart();
   });
@@ -419,13 +453,12 @@ void displayHolding(int index) {
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_16);
-  currency.toUpperCase();
-  String crypto = holdings[index].tickerId;
-  crypto.toUpperCase();
+  String tickerId = holdings[index].tickerId;
+  tickerId.toUpperCase();
   // c++ char formatting using +/- sign
   char percent_change_24h[6];
   snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", (tickerResponse.price / statsResponse.open - 1) * 100);
-  display.drawString(64, 0, crypto + currency + " " + percent_change_24h + "%");
+  display.drawString(64, 0, tickerId + " " + percent_change_24h + "%");
   display.setFont(ArialMT_Plain_24);
   float price = (float)tickerResponse.price;
   holdings[index].oldPrice = holdings[index].newPrice;
@@ -447,21 +480,21 @@ void displayHolding(int index) {
     display.drawXbm(110, 44, BATTERY_1_3_WIDTH, BATTERY_1_3_HEIGHT, battery_1_3);
   } 
   if (holdings[index].newPrice < holdings[index].oldPrice) {
-    display.fillTriangle(100, 29, 114, 29, 107, 36);
+    display.fillTriangle(110, 29, 124, 29, 117, 36);
   } else if (holdings[index].newPrice > holdings[index].oldPrice) {
-    display.fillTriangle(100, 37, 114, 37, 107, 30);
+    display.fillTriangle(110, 37, 124, 37, 117, 30);
   }
   display.display();
-  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - LEDthreshold / 100.0))) {
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.LEDthreshold / 100.0))) {
     LEDdown();
   }
-  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + LEDthreshold / 100.0)) && holdings[index].oldPrice != 0) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.LEDthreshold / 100.0)) && holdings[index].oldPrice != 0) {
     LEDup();
   }
-  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - buzzerThreshold / 100.0))) {
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.buzzerThreshold / 100.0))) {
     buzzerDown();
   }
-  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + buzzerThreshold / 100.0)) && holdings[index].oldPrice != 0) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.buzzerThreshold / 100.0)) && holdings[index].oldPrice != 0) {
     buzzerUp();
   }
 }
@@ -531,7 +564,7 @@ String formatCurrency(float price) {
   } else if (price >= 1) {
     pointsAfterDecimal = 4;
   } else {
-    pointsAfterDecimal = 6;
+    pointsAfterDecimal = 5;
   }
   formattedCurrency.concat(String(price, pointsAfterDecimal));
   return formattedCurrency;
@@ -548,10 +581,10 @@ String formatVolume(float volume) {
 bool loadDataForHolding(int index, unsigned long timeNow) {
   int nextIndex = getNextIndex();
   if (nextIndex > -1 ) {
-    holdings[index].lastTickerResponse = api.GetTickerInfo(holdings[index].tickerId, currency);
+    holdings[index].lastTickerResponse = api.GetTickerInfo(holdings[index].tickerId);
     // stats reading every 30 s
     if (holdings[index].statsReadDue < timeNow) {
-      holdings[index].lastStatsResponse = api.GetStatsInfo(holdings[index].tickerId, currency);
+      holdings[index].lastStatsResponse = api.GetStatsInfo(holdings[index].tickerId);
       holdings[index].statsReadDue = timeNow + 30000;
     }    
     if (holdings[index].lastTickerResponse.error != "" || holdings[index].lastStatsResponse.error != "") {
@@ -616,14 +649,6 @@ void lowBattery(void) {
 }
 
 void loop() {
-  // To access your stored values on inputString, inputInt, inputLEDthreshold
-//  LEDthreshold = readFile(SPIFFS, "/inputLEDthreshold.txt").toFloat();
-//  Serial.print("*** Your inputLEDthreshold: ");
-//  Serial.println(LEDthreshold);
-//  String crypto = readFile(SPIFFS, "/inputCrypto.txt");
-//  Serial.print("*** Your crypto: ");
-//  Serial.println(crypto);
-//  delay(5000);
 
   // Call the double reset detector loop method every so often,
   // so that it can recognise when the timeout expires.
@@ -652,6 +677,6 @@ void loop() {
     } else {
       displayMessage(F("No funds to display. Edit the setup to add them"));
     }
-    screenChangeDue = timeNow + screenChangeDelay;
+    screenChangeDue = timeNow + settings.screenChangeDelay;
   }
 }

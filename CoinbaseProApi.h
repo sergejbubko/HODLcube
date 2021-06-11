@@ -46,8 +46,8 @@ class CoinbaseProApi
   public:
     CoinbaseProApi (WiFiClientSecure &client);
     String SendGetToCoinbasePro(String command);
-    CBPTickerResponse GetTickerInfo(String coinId, String currency = "");
-    CBPStatsResponse GetStatsInfo(String coinId, String currency = "");
+    CBPTickerResponse GetTickerInfo(String coinId);
+    CBPStatsResponse GetStatsInfo(String coinId);
     int Port = 443;
 
   private:
