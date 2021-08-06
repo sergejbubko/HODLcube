@@ -9,5 +9,8 @@
   "cryptos4" : "eth-eur",  
   "cryptos5" : "ltc-usd",
   "cryptos6" : "ltc-eur",
-  "cryptos7" : "ltc-btc"
+  "cryptos7" : "ltc-btc",  
+  "cryptos8" : "xrp-usd",  
+  "cryptos9" : "xrp-eur",  
+  "cryptos10" : "xrp-btc"
 }

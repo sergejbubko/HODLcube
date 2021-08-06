@@ -79,7 +79,7 @@
 // RTC Memory Address for the DoubleResetDetector to use
 #define DRD_ADDRESS 0
 
-const char* VER = "v1.0";
+const char* VER = "v0.2.1";
 
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
@@ -402,6 +402,8 @@ void setup() {
       String param = "crypto" + String(i);
       if (request->hasParam(param)) {
         settings.cryptos[i] = request->getParam(param)->value();
+      } else {
+        settings.cryptos[i] = "null";
       }
     }
     Serial.println(F("Saving configuration..."));
@@ -571,9 +573,9 @@ String formatCurrency(float price) {
 }
 
 String formatVolume(float volume) {
-  if (volume > 999) {
+  if (volume > 999.0) {
     return String(volume/1000.0, 1) + "k";
-  } else if (volume > 999999) {
+  } else if (volume > 999999.0) {
     return String(volume/1000000.0, 1) + "M";
   }
 }
