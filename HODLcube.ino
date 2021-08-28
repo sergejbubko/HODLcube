@@ -63,9 +63,6 @@
 // Display power
 #define DISPLAY_POWER_PIN D8
 
-// Battery
-#define BATTERY_PIN A0
-
 // Have tested up to 10, can probably do more
 #define MAX_HOLDINGS 10
 
@@ -79,16 +76,14 @@
 // RTC Memory Address for the DoubleResetDetector to use
 #define DRD_ADDRESS 0
 
-const char* VER = "v0.2.1";
+const char* VER = "v0.2.2";
 
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
 
 unsigned long screenChangeDue;
 
-float batVoltage; // in volts
-unsigned long batVreadDelay = 60000; // in millis, reading battery voltage too often drains battery
-unsigned long batVreadDue;
+int dataNotLoadedCounter = 0;
 
 const char* PARAM_LEDTHRESHOLD = "inputLEDthreshold";
 const char* PARAM_BUZZERTHRESHOLD = "inputBuzzerThreshold";
@@ -285,17 +280,11 @@ void setup() {
   pinMode(LED_PIN_DOWN, OUTPUT);
   pinMode(LED_PIN_UP, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(BATTERY_PIN, INPUT);
 
   // Initialising the display
   display.init();
   display.flipScreenVertically();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  
-  batVoltage = batteryVoltage();
-  if (batVoltage > 2.0 && batVoltage < 3.3) {
-    lowBattery();
-  }
 
   display.clear();
   display.setFont(ArialMT_Plain_24);
@@ -468,19 +457,11 @@ void displayHolding(int index) {
   display.drawString(64, 20, formatCurrency(price));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 45, "L:" + String(statsResponse.low, 0));  
-  display.drawString(2, 54, "H:" + String(statsResponse.high, 0));
-  display.drawString(50, 45, "vol:" + formatVolume(statsResponse.volume_24h));
-  if (batVoltage) {  
-    display.drawString(100, 54, String(batVoltage) + "V");
-  }
-  if (batVoltage > 3.8) {
-    display.drawXbm(110, 44, BATTERY_3_3_WIDTH, BATTERY_3_3_HEIGHT, battery_3_3);
-  } else if (batVoltage > 3.6) {
-    display.drawXbm(110, 44, BATTERY_2_3_WIDTH, BATTERY_2_3_HEIGHT, battery_2_3);
-  } else if (batVoltage > 3.4) {
-    display.drawXbm(110, 44, BATTERY_1_3_WIDTH, BATTERY_1_3_HEIGHT, battery_1_3);
-  } 
+  display.drawString(2, 45, "Lo:" + String(statsResponse.low, 0));  
+  display.drawString(2, 54, "Hi:" + String(statsResponse.high, 0));
+  display.drawString(60, 45, "vol 24h:" + formatVolume(statsResponse.volume_24h));
+  display.drawString(60, 54, "vol 30d:" + formatVolume(statsResponse.volume_30day));
+ 
   if (holdings[index].newPrice < holdings[index].oldPrice) {
     display.fillTriangle(110, 29, 124, 29, 117, 36);
   } else if (holdings[index].newPrice > holdings[index].oldPrice) {
@@ -573,10 +554,14 @@ String formatCurrency(float price) {
 }
 
 String formatVolume(float volume) {
-  if (volume > 999.0) {
+  if (volume <= 999) {
+    return String(volume, 1);
+  } else if (volume > 999) {
     return String(volume/1000.0, 1) + "k";
-  } else if (volume > 999999.0) {
+  } else if (volume > 999999) {
     return String(volume/1000000.0, 1) + "M";
+  } else if (volume > 999999999) {
+    return String(volume/1000000000.0, 1) + "G";
   }
 }
 
@@ -599,57 +584,6 @@ bool loadDataForHolding(int index, unsigned long timeNow) {
   return false;
 }
 
-float batteryVoltage() {
-  unsigned int raw=0;
-  float voltage=0.0;
-//  float voltageMatrix[22][2] = {
-//    {4.2,  100},
-//    {4.15, 95},
-//    {4.11, 90},
-//    {4.08, 85},
-//    {4.02, 80},
-//    {3.98, 75},
-//    {3.95, 70},
-//    {3.91, 65},
-//    {3.87, 60},
-//    {3.85, 55},
-//    {3.84, 50},
-//    {3.82, 45},
-//    {3.80, 40},
-//    {3.79, 35},
-//    {3.77, 30},
-//    {3.75, 25},
-//    {3.73, 20},
-//    {3.71, 15},
-//    {3.69, 10},
-//    {3.61, 5},
-//    {3.27, 0},
-//    {0, 0}};
-  raw = analogRead(BATTERY_PIN);
-  // Wemos D1 Internal Voltage divider (220kOhm+100kOhm) and Wemos battery shield is used with J2 jumper soldered (130kOhm)
-  // 4.5V is maximum LiPo battery voltage
-  // due to voltage measurements constant is added
-  voltage=raw/1023.0*4.5*0.98;
-  return (voltage < 2.0 ? 0.0 : voltage);
-//  for(int i=20; i>=0; i--) {
-//    if(voltageMatrix[i][0] >= voltage) {
-//      return (int) voltageMatrix[i + 1][1];
-//    }
-//  }
-}
-void lowBattery(void) {
-  display.clear();
-  display.drawXbm(47, 12, BATTERY_0_3_WIDTH, BATTERY_0_3_HEIGHT, battery_0_3);
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(64, 37, F("low battery"));
-  display.display();
-  tone(BUZZER_PIN, 33, 500);
-  delay(5000);
-  //display.displayOff();
-  ESP.deepSleep(0);
-}
-
 void loop() {
 
   // Call the double reset detector loop method every so often,
@@ -657,15 +591,9 @@ void loop() {
   // You can also call drd.stop() when you wish to no longer
   // consider the next reset as a double reset.
   drd.loop();
-  
+
+
   unsigned long timeNow = millis();
-  if (timeNow > batVreadDue) {
-    batVoltage = batteryVoltage();
-    batVreadDue = timeNow + batVreadDelay;
-  }
-  if (batVoltage > 2.0 && batVoltage < 3.3) {
-    lowBattery();
-  }
   if ((timeNow > screenChangeDue))  {
     currentIndex = getNextIndex();
     if (currentIndex > -1) {
@@ -673,7 +601,13 @@ void loop() {
 //      Serial.println(currentIndex);
       if (loadDataForHolding(currentIndex, timeNow)) {
         displayHolding(currentIndex);
+        dataNotLoadedCounter = 0;
       } else {
+        dataNotLoadedCounter++;
+        Serial.println("Number of data loading errors in a row: ");
+        Serial.println(dataNotLoadedCounter);
+      }
+      if (dataNotLoadedCounter > 5) {
         displayMessage(F("Error loading data. Check wifi connection or increase screen change delay in config."));
       }
     } else {
