@@ -76,7 +76,7 @@
 // RTC Memory Address for the DoubleResetDetector to use
 #define DRD_ADDRESS 0
 
-const char* VER = "v0.2.2";
+const char* VER = "v0.3.0";
 
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
@@ -85,8 +85,9 @@ unsigned long screenChangeDue;
 
 int dataNotLoadedCounter = 0;
 
-const char* PARAM_LEDTHRESHOLD = "inputLEDthreshold";
-const char* PARAM_BUZZERTHRESHOLD = "inputBuzzerThreshold";
+const char* PARAM_LEDTICKTHRESH = "inputLEDtickThresh";
+const char* PARAM_BUZZTICKTHRESH = "inputBuzzTickThresh";
+const char* PARAM_BUZZCPTHRESH = "inputBuzzCPThresh";
 const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
 const char* PARAM_CURRENCY = "inputCurrency";
 
@@ -98,11 +99,13 @@ struct Holding {
   unsigned long statsReadDue;
   CBPTickerResponse lastTickerResponse;
   CBPStatsResponse lastStatsResponse;
+  float priceCheckpoint;
 };
 
 struct Settings {
-  float LEDthreshold; // percent
-  float buzzerThreshold;
+  float LEDtickThresh; // LED threshold for two prices in a row (ticker) in percent
+  float buzzTickThresh; // buzzer threshold for two prices in a row (ticker) in percent
+  float buzzCPThresh; // buzzer threshold for difference between checkpoint price and current price in percent
 // We'll request a new value just before we change the screen so it's the most up to date
 // Rate Limits: https://docs.pro.coinbase.com/#rate-limits
 // We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
@@ -129,9 +132,15 @@ void loadSettings(const char *filename, Settings &settings) {
     Serial.println(F("Failed to read file, using default settings"));
 
   // Copy values from the JsonDocument to the Config
-  settings.LEDthreshold = doc["LEDthreshold"] | 0.05;
-  settings.buzzerThreshold = doc["buzzerThreshold"] | 0.1;
+  // threshold for difference of last two loaded prices in a row in percent
+  settings.LEDtickThresh = doc["LEDtickThresh"] | 0.01;
+  // threshold for difference of last two loaded prices in a row in percent
+  settings.buzzTickThresh = doc["buzzTickThresh"] | 0.01; 
+  // threshold for daily price change in percent
+  settings.buzzCPThresh = doc["buzzCPThresh"] | 5;
+  // time in milis to reload new prices and/or another crypto from saved list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
+  // list of cryptocurrencies to choose from
   settings.cryptos[0] = String(doc["cryptos0"]);
   settings.cryptos[1] = String(doc["cryptos1"]);  
   settings.cryptos[2] = String(doc["cryptos2"]);  
@@ -167,8 +176,9 @@ void saveSettings(const char *filename, const Settings &settings) {
   StaticJsonDocument<384> doc;
 
   // Set the values in the document 
-  doc["LEDthreshold"] = settings.LEDthreshold;
-  doc["buzzerThreshold"] = settings.buzzerThreshold;
+  doc["LEDtickThresh"] = settings.LEDtickThresh;
+  doc["buzzTickThresh"] = settings.buzzTickThresh;
+  doc["buzzCPThresh"] = settings.buzzCPThresh;
   doc["screenChangeDelay"] = settings.screenChangeDelay;  
   doc["cryptos0"] = settings.cryptos[0];
   doc["cryptos1"] = settings.cryptos[1];  
@@ -224,11 +234,14 @@ void notFound(AsyncWebServerRequest *request) {
 // it looks for variables in format %var_name%
 String processor(const String& var){
   //Serial.println(var);
-  if(var == PARAM_LEDTHRESHOLD){
-    return String(settings.LEDthreshold);
+  if(var == PARAM_LEDTICKTHRESH){
+    return String(settings.LEDtickThresh);
   }
-  if(var == PARAM_BUZZERTHRESHOLD){
-    return String(settings.buzzerThreshold);
+  if(var == PARAM_BUZZTICKTHRESH){
+    return String(settings.buzzTickThresh);
+  }
+  if(var == PARAM_BUZZCPTHRESH){
+    return String(settings.buzzCPThresh);
   }
   for (int i = 0; i < CRYPTO_COUNT; i++) {
     if(var == settings.cryptos[i]){
@@ -251,6 +264,7 @@ void addNewHolding(String tickerId, float newPrice = 0, float oldPrice = 0) {
     holdings[index].oldPrice = oldPrice;
     holdings[index].inUse = true;
     holdings[index].statsReadDue = 0;
+    holdings[index].priceCheckpoint = 0.0;
   }
 }
 
@@ -288,13 +302,13 @@ void setup() {
 
   display.clear();
   display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 8, F("#HODL"));
+  display.drawString(64, 8, F("HODL"));
   display.drawString(64, 32, F("cube"));
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_10);
   display.drawString(128, 50, VER);
   display.display();
-  delay(3000);
+  delay(2000);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -377,12 +391,15 @@ void setup() {
   // Send a GET request to <ESP_IP>/get?inputString=<inputMessage>
   server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
     String inputMessage = "";
-    // GET inputLEDthreshold value on <ESP_IP>/get?inputLEDthreshold=<inputMessage>
-    if (request->hasParam(PARAM_LEDTHRESHOLD)) {
-      settings.LEDthreshold = (float)request->getParam(PARAM_LEDTHRESHOLD)->value().toFloat();
+    // GET inputLEDtickThresh value on <ESP_IP>/get?inputLEDtickThresh=<inputMessage>
+    if (request->hasParam(PARAM_LEDTICKTHRESH)) {
+      settings.LEDtickThresh = (float)request->getParam(PARAM_LEDTICKTHRESH)->value().toFloat();
     }
-    if (request->hasParam(PARAM_BUZZERTHRESHOLD)) {
-      settings.buzzerThreshold = request->getParam(PARAM_BUZZERTHRESHOLD)->value().toFloat();
+    if (request->hasParam(PARAM_BUZZTICKTHRESH)) {
+      settings.buzzTickThresh = request->getParam(PARAM_BUZZTICKTHRESH)->value().toFloat();
+    }
+    if (request->hasParam(PARAM_BUZZCPTHRESH)) {
+      settings.buzzCPThresh = request->getParam(PARAM_BUZZCPTHRESH)->value().toFloat();
     }
     if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
       settings.screenChangeDelay = (long)request->getParam(PARAM_SCREENCHANGEDELAY)->value().toInt();
@@ -448,7 +465,8 @@ void displayHolding(int index) {
   tickerId.toUpperCase();
   // c++ char formatting using +/- sign
   char percent_change_24h[6];
-  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", (tickerResponse.price / statsResponse.open - 1) * 100);
+  float f_percent_change_24h = (tickerResponse.price / statsResponse.open - 1) * 100;
+  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", f_percent_change_24h);
   display.drawString(64, 0, tickerId + " " + percent_change_24h + "%");
   display.setFont(ArialMT_Plain_24);
   float price = (float)tickerResponse.price;
@@ -457,8 +475,8 @@ void displayHolding(int index) {
   display.drawString(64, 20, formatCurrency(price));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 45, "Lo:" + String(statsResponse.low, 0));  
-  display.drawString(2, 54, "Hi:" + String(statsResponse.high, 0));
+  display.drawString(2, 45, "L:" + String(statsResponse.low, 0));  
+  display.drawString(2, 54, "H:" + String(statsResponse.high, 0));
   display.drawString(60, 45, "vol 24h:" + formatVolume(statsResponse.volume_24h));
   display.drawString(60, 54, "vol 30d:" + formatVolume(statsResponse.volume_30day));
  
@@ -468,17 +486,21 @@ void displayHolding(int index) {
     display.fillTriangle(110, 37, 124, 37, 117, 30);
   }
   display.display();
-  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.LEDthreshold / 100.0))) {
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.LEDtickThresh / 100.0))) {
     LEDdown();
   }
-  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.LEDthreshold / 100.0)) && holdings[index].oldPrice != 0) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.LEDtickThresh / 100.0)) && holdings[index].oldPrice != 0) {
     LEDup();
   }
-  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.buzzerThreshold / 100.0))) {
+  if (holdings[index].newPrice < (holdings[index].oldPrice * (1.0 - settings.buzzTickThresh / 100.0))) {
     buzzerDown();
   }
-  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.buzzerThreshold / 100.0)) && holdings[index].oldPrice != 0) {
+  else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.buzzTickThresh / 100.0)) && holdings[index].oldPrice != 0) {
     buzzerUp();
+  }  
+  // TODO add flag or offset to beep only once at period of time (maybe 24h)
+  if (isCPThreshReached(index)) {
+    buzzer();
   }
 }
 
@@ -495,8 +517,8 @@ void LEDup(){
   digitalWrite(LED_PIN_UP, LOW); 
 }
 
-void buzzerDown(){    
-  // Flash LED
+void buzzerSOS(){    
+  // Sound buzzer SOS
   for (int i = 0; i < 3; i++) {
     digitalWrite(BUZZER_PIN, HIGH);
     delay(100);
@@ -517,15 +539,45 @@ void buzzerDown(){
   }
 }
 
-void buzzerUp(){    
-  // Flash LED
+void buzzer(){    
+  // Sound buzzer BEEP-BEEP-BEEP
   digitalWrite(BUZZER_PIN, HIGH);
-  delay(300);
+  delay(200);
   digitalWrite(BUZZER_PIN, LOW); 
-  delay(300);
+  delay(150);
   digitalWrite(BUZZER_PIN, HIGH);
-  delay(300);
+  delay(200);
   digitalWrite(BUZZER_PIN, LOW);
+  delay(150);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(200);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+void buzzerUp(){
+  // Sound buzzer BEEP-BEEP
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(75);
+  digitalWrite(BUZZER_PIN, LOW); 
+}
+
+void buzzerDown(){
+  // Sound buzzer BEEP-BEEP
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(220);
+  digitalWrite(BUZZER_PIN, LOW); 
+}
+
+bool isCPThreshReached (int index) {  
+  bool result = false;
+  if ((holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) ||
+  (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice)) {    
+    result = holdings[index].priceCheckpoint == 0.0 ? false : true;
+    holdings[index].priceCheckpoint = holdings[index].newPrice;
+    Serial.print("New price checkpoint:");
+    Serial.println(holdings[index].priceCheckpoint);
+  }
+  return result;
 }
 
 void displayMessage(String message){
