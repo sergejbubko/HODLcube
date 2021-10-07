@@ -1,16 +1,14 @@
 {
-  "LEDthreshold": 0.05,
-  "buzzerThreshold": 0.1,
+  "LEDtickThresh": 0.01,
+  "buzzTickThresh": 0.01,
+  "buzzCPThresh": 5,
   "screenChangeDelay" : 5000,
   "cryptos0" : "btc-usd",
-  "cryptos1" : "btc-eur",  
-  "cryptos2" : "eth-btc",  
-  "cryptos3" : "eth-usd",  
-  "cryptos4" : "eth-eur",  
-  "cryptos5" : "ltc-usd",
-  "cryptos6" : "ltc-eur",
-  "cryptos7" : "ltc-btc",  
-  "cryptos8" : "xrp-usd",  
-  "cryptos9" : "xrp-eur",  
-  "cryptos10" : "xrp-btc"
+  "cryptos1" : "null",  
+  "cryptos2" : "null",  
+  "cryptos3" : "null",  
+  "cryptos4" : "null",  
+  "cryptos5" : "null",
+  "cryptos6" : "null",
+  "cryptos7" : "null"
 }
