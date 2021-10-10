@@ -67,7 +67,7 @@
 #define MAX_HOLDINGS 10
 
 // number of crypto showing in config portal
-#define CRYPTO_COUNT 8
+#define CRYPTO_COUNT 17
 
 // Number of seconds after reset during which a 
 // subseqent reset will be considered a double reset.
@@ -107,8 +107,8 @@ struct Settings {
   float buzzTickThresh; // buzzer threshold for two prices in a row (ticker) in percent
   float buzzCPThresh; // buzzer threshold for difference between checkpoint price and current price in percent
 // We'll request a new value just before we change the screen so it's the most up to date
-// Rate Limits: https://docs.pro.coinbase.com/#rate-limits
-// We throttle public endpoints by IP: 3 requests per second, up to 6 requests per second in bursts. Some endpoints may have custom rate limits.
+// Rate Limits: https://docs.cloud.coinbase.com/exchange/docs/rate-limits
+// We throttle public endpoints by IP: 10 requests per second, up to 15 requests per second in bursts. Some endpoints may have custom rate limits.
   unsigned long screenChangeDelay; // milis
   String cryptos[CRYPTO_COUNT];
 };
@@ -128,8 +128,9 @@ void loadSettings(const char *filename, Settings &settings) {
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
-  if (error)
+  if (error) {
     Serial.println(F("Failed to read file, using default settings"));
+  }
 
   // Copy values from the JsonDocument to the Config
   // threshold for difference of last two loaded prices in a row in percent
@@ -148,12 +149,17 @@ void loadSettings(const char *filename, Settings &settings) {
   settings.cryptos[4] = String(doc["cryptos4"]);  
   settings.cryptos[5] = String(doc["cryptos5"]);
   settings.cryptos[6] = String(doc["cryptos6"]);
-  settings.cryptos[7] = String(doc["cryptos7"]);  
+  settings.cryptos[7] = String(doc["cryptos7"]); 
+  settings.cryptos[8] = String(doc["cryptos8"]);
+  settings.cryptos[9] = String(doc["cryptos9"]);  
+  settings.cryptos[10] = String(doc["cryptos10"]); 
+  settings.cryptos[11] = String(doc["cryptos11"]); 
+  settings.cryptos[12] = String(doc["cryptos12"]); 
+  settings.cryptos[13] = String(doc["cryptos13"]); 
+  settings.cryptos[14] = String(doc["cryptos14"]); 
+  settings.cryptos[15] = String(doc["cryptos15"]); 
+  settings.cryptos[16] = String(doc["cryptos16"]);  
   
-//  strlcpy(settings.hostname,                  // <- destination
-//          doc["hostname"] | "example.com",  // <- source
-//          sizeof(settings.hostname));         // <- destination's capacity
-
 // Close the file
   file.close();
 }
@@ -188,6 +194,15 @@ void saveSettings(const char *filename, const Settings &settings) {
   doc["cryptos5"] = settings.cryptos[5];
   doc["cryptos6"] = settings.cryptos[6];
   doc["cryptos7"] = settings.cryptos[7];  
+  doc["cryptos8"] = settings.cryptos[8];
+  doc["cryptos9"] = settings.cryptos[9];  
+  doc["cryptos10"] = settings.cryptos[10];  
+  doc["cryptos10"] = settings.cryptos[11];  
+  doc["cryptos10"] = settings.cryptos[12];  
+  doc["cryptos10"] = settings.cryptos[13];  
+  doc["cryptos10"] = settings.cryptos[14];  
+  doc["cryptos10"] = settings.cryptos[15];  
+  doc["cryptos10"] = settings.cryptos[16];  
   
   // Serialize JSON to file
   if (serializeJson(doc, file) == 0) {
@@ -277,11 +292,11 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawStringMaxWidth(0, 0, 128, F("Connect your phone to wifi network called:"));
+  display.drawStringMaxWidth(0, 0, 128, F("Use phone/PC and connect to wifi SSID:"));
   display.setFont(ArialMT_Plain_16);
   display.drawString(5, 22, ssidAP);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 37, F("and use password:"));
+  display.drawString(0, 37, F("password:"));
   display.setFont(ArialMT_Plain_16);
   display.drawString(5, 48, pwdAP);
   display.display();
@@ -301,12 +316,13 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
 
   display.clear();
-  display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 8, F("HODL"));
-  display.drawString(64, 32, F("cube"));
+//  display.setFont(ArialMT_Plain_24);
+//  display.drawString(64, 8, F("HODL"));
+//  display.drawString(64, 32, F("cube"));
+  display.drawXbm(27, 5, MAINLOGO_WIDTH, MAINLOGO_HEIGHT, mainLogo);
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(128, 50, VER);
+  display.drawString(128, 54, VER);
   display.display();
   delay(2000);
 
@@ -364,11 +380,13 @@ void setup() {
   // Dump config file
   Serial.println(F("Print config file..."));
   printFile(filename);
-  
+
+  int j = 0;
   for (int i = 0; i < CRYPTO_COUNT; i++) {
-    if (settings.cryptos[i] != "null") {    
+    if (settings.cryptos[i] != "null" && j < MAX_HOLDINGS) {
       Serial.println("Added: " + settings.cryptos[i]);
       addNewHolding(settings.cryptos[i]);
+      j++;
     }
   }
   IPAddress ip = WiFi.localIP();
