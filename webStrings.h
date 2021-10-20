@@ -1,3 +1,4 @@
+#ifndef _WEB_STRINGS_H_
 #define _WEB_STRINGS_H_
 const char index_html[] PROGMEM = "<html lang='en'><head>"
 "<meta name='format-detection' content='telephone=no'>"
@@ -59,7 +60,7 @@ const char index_html[] PROGMEM = "<html lang='en'><head>"
 "and new checkpoint with the new value is created.</div></div>"
 "<div class='row mb-2'>"
 "<div class='mb-2 col-sm-4 alert alert-info'>The higher the threshold values are, the less often the LEDs (buzzer) are activated.</div></div>"
-"<h4>Currency pairs (max 5)</h4>"
+"<h4>Currency pairs</h4>"
 "<div class='form-check'>"
 "<input type='checkbox' name='crypto0' value='btc-usd' %btc-usd% class='form-check-input'>"
 "<label for='crypto0' class='form-check-label'>Bitcoin - US Dollar</label>"
