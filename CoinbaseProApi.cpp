@@ -4,6 +4,7 @@ CoinbaseProApi::CoinbaseProApi(WiFiClientSecure &client)  {
   this->client = &client;
   responseTickerObject = CBPTickerResponse();
   responseStatsObject = CBPStatsResponse();
+  responseCandlesObject = CBPCandlesResponse();
 }
 
 String CoinbaseProApi::SendGetToCoinbasePro(String command) {
@@ -66,7 +67,7 @@ CBPTickerResponse CoinbaseProApi::GetTickerInfo(String tickerId) {
   String commandTicker="/products/" + tickerId + "/ticker";
   
   String responseTicker = SendGetToCoinbasePro(commandTicker);
-  Serial.println(responseTicker); 
+  Serial.println(String(tickerId) + " ticker: " + String(responseTicker));
   
   StaticJsonDocument<256> ticker;
   
@@ -95,7 +96,7 @@ CBPStatsResponse CoinbaseProApi::GetStatsInfo(String tickerId) {
   String commandStats="/products/" + tickerId + "/stats";
   
   String responseStats = SendGetToCoinbasePro(commandStats);
-  Serial.println(responseStats);
+  Serial.println(String(tickerId) + " stats: " + String(responseStats));
   
   StaticJsonDocument<256> stats;
   
@@ -120,6 +121,34 @@ CBPStatsResponse CoinbaseProApi::GetStatsInfo(String tickerId) {
   responseStatsObject.error = "";
  
   return responseStatsObject;
+}
+
+CBPCandlesResponse CoinbaseProApi::GetCandlesInfo(String tickerId, String date) {
+  // https://api.pro.coinbase.com/products/btc-eur/candles?granularity=86400&start=2021-01-01&end=2021-01-01
+  String commandCandles="/products/" + tickerId + "/candles?granularity=86400&start=" + date + "&end=" + date;
+  
+  String responseCandles = SendGetToCoinbasePro(commandCandles);
+  Serial.println(String(tickerId) + " candles " + date +": " + String(responseCandles));
+
+  StaticJsonDocument<256> candles;
+
+  // Deserialize the JSON document
+  DeserializationError errorCandles = deserializeJson(candles, responseCandles);  
+
+  // Test if parsing succeeds.
+  if (errorCandles) {
+    responseCandlesObject.error = errorCandles.f_str();
+//    Serial.print(F("deserializeJson() failed: "));
+//    Serial.println(errorTicker.f_str());
+    return responseCandlesObject;
+  }
+
+  // Fetch values
+  // [[1609459200,23512.7,24250,23706.73,24070.97,1830.04655405]]
+  responseCandlesObject.open = candles[0][3].as<float>();
+  responseCandlesObject.error = "";
+ 
+  return responseCandlesObject;
 }
 
 void CoinbaseProApi::closeClient() {

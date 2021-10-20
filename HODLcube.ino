@@ -34,6 +34,8 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 // https://github.com/me-no-dev/ESPAsyncTCP
 #include <ESPAsyncTCP.h>
 #include <Hash.h>
@@ -63,11 +65,11 @@
 // Display power
 #define DISPLAY_POWER_PIN D8
 
-// Have tested up to 10, can probably do more
-#define MAX_HOLDINGS 10
+// Have tested up to 5, can probably do more
+#define MAX_HOLDINGS 5
 
 // number of crypto showing in config portal
-#define CRYPTO_COUNT 17
+#define CRYPTO_COUNT 14
 
 // Number of seconds after reset during which a 
 // subseqent reset will be considered a double reset.
@@ -76,14 +78,23 @@
 // RTC Memory Address for the DoubleResetDetector to use
 #define DRD_ADDRESS 0
 
+// Time intervals in millis
+#define MINUTE_INTERVAL 60000
+#define HOUR_INTERVAL 3600000
+#define DAY_INTERVAL 86400000
+
 const char* VER = "v0.3.0";
 
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
 
-unsigned long screenChangeDue;
+unsigned long screenChangeDue = 0;
+unsigned long checkDateTimeInterval = 0;
 
 int dataNotLoadedCounter = 0;
+
+String dateWeekAgo = "";
+String currentYear = "";
 
 const char* PARAM_LEDTICKTHRESH = "inputLEDtickThresh";
 const char* PARAM_BUZZTICKTHRESH = "inputBuzzTickThresh";
@@ -97,8 +108,12 @@ struct Holding {
   float oldPrice;
   bool inUse;
   unsigned long statsReadDue;
+  unsigned long weekAgoPriceReadDue;
+  unsigned long YTDPriceReadDue;
   CBPTickerResponse lastTickerResponse;
   CBPStatsResponse lastStatsResponse;
+  CBPCandlesResponse weekAgoPriceResponse;
+  CBPCandlesResponse YTDPriceResponse;
   float priceCheckpoint;
 };
 
@@ -142,7 +157,7 @@ void loadSettings(const char *filename, Settings &settings) {
   // time in milis to reload new prices and/or another crypto from saved list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
   // list of cryptocurrencies to choose from
-  settings.cryptos[0] = String(doc["cryptos0"]);
+  settings.cryptos[0] = String(doc["cryptos0"] | "btc-usd");
   settings.cryptos[1] = String(doc["cryptos1"]);  
   settings.cryptos[2] = String(doc["cryptos2"]);  
   settings.cryptos[3] = String(doc["cryptos3"]);  
@@ -156,9 +171,6 @@ void loadSettings(const char *filename, Settings &settings) {
   settings.cryptos[11] = String(doc["cryptos11"]); 
   settings.cryptos[12] = String(doc["cryptos12"]); 
   settings.cryptos[13] = String(doc["cryptos13"]); 
-  settings.cryptos[14] = String(doc["cryptos14"]); 
-  settings.cryptos[15] = String(doc["cryptos15"]); 
-  settings.cryptos[16] = String(doc["cryptos16"]);  
   
 // Close the file
   file.close();
@@ -197,12 +209,9 @@ void saveSettings(const char *filename, const Settings &settings) {
   doc["cryptos8"] = settings.cryptos[8];
   doc["cryptos9"] = settings.cryptos[9];  
   doc["cryptos10"] = settings.cryptos[10];  
-  doc["cryptos10"] = settings.cryptos[11];  
-  doc["cryptos10"] = settings.cryptos[12];  
-  doc["cryptos10"] = settings.cryptos[13];  
-  doc["cryptos10"] = settings.cryptos[14];  
-  doc["cryptos10"] = settings.cryptos[15];  
-  doc["cryptos10"] = settings.cryptos[16];  
+  doc["cryptos11"] = settings.cryptos[11];  
+  doc["cryptos12"] = settings.cryptos[12];  
+  doc["cryptos13"] = settings.cryptos[13];  
   
   // Serialize JSON to file
   if (serializeJson(doc, file) == 0) {
@@ -240,6 +249,10 @@ DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
 Holding holdings[MAX_HOLDINGS];
 
 SH1106 display(0x3c, SDA_PIN, SCL_PIN);
+
+// Define NTP Client to get time
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 void notFound(AsyncWebServerRequest *request) {
   request->send(404, "text/plain", "Not found");
@@ -279,6 +292,7 @@ void addNewHolding(String tickerId, float newPrice = 0, float oldPrice = 0) {
     holdings[index].oldPrice = oldPrice;
     holdings[index].inUse = true;
     holdings[index].statsReadDue = 0;
+    holdings[index].weekAgoPriceReadDue = 0;
     holdings[index].priceCheckpoint = 0.0;
   }
 }
@@ -316,9 +330,6 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
 
   display.clear();
-//  display.setFont(ArialMT_Plain_24);
-//  display.drawString(64, 8, F("HODL"));
-//  display.drawString(64, 32, F("cube"));
   display.drawXbm(27, 5, MAINLOGO_WIDTH, MAINLOGO_HEIGHT, mainLogo);
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_10);
@@ -384,7 +395,7 @@ void setup() {
   int j = 0;
   for (int i = 0; i < CRYPTO_COUNT; i++) {
     if (settings.cryptos[i] != "null" && j < MAX_HOLDINGS) {
-      Serial.println("Added: " + settings.cryptos[i]);
+      Serial.println("Added #" + String(j) + ":" + settings.cryptos[i]);
       addNewHolding(settings.cryptos[i]);
       j++;
     }
@@ -442,6 +453,16 @@ void setup() {
   });
   server.onNotFound(notFound);
   server.begin();
+  
+  // Initialize a NTPClient to get time
+  timeClient.begin();
+  // Set offset time in seconds to adjust for your timezone, for example:
+  // GMT +1 = 3600
+  // GMT +8 = 28800
+  // GMT -1 = -3600
+  // GMT 0 = 0
+  timeClient.setTimeOffset(0);
+  
   delay(5000);
 }
 
@@ -483,8 +504,7 @@ void displayHolding(int index) {
   tickerId.toUpperCase();
   // c++ char formatting using +/- sign
   char percent_change_24h[6];
-  float f_percent_change_24h = (tickerResponse.price / statsResponse.open - 1) * 100;
-  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", f_percent_change_24h);
+  snprintf(percent_change_24h, sizeof(percent_change_24h), "%+3.1f", (tickerResponse.price / statsResponse.open - 1) * 100);
   display.drawString(64, 0, tickerId + " " + percent_change_24h + "%");
   display.setFont(ArialMT_Plain_24);
   float price = (float)tickerResponse.price;
@@ -493,10 +513,24 @@ void displayHolding(int index) {
   display.drawString(64, 20, formatCurrency(price));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 45, "L:" + String(statsResponse.low, 0));  
-  display.drawString(2, 54, "H:" + String(statsResponse.high, 0));
-  display.drawString(60, 45, "vol 24h:" + formatVolume(statsResponse.volume_24h));
-  display.drawString(60, 54, "vol 30d:" + formatVolume(statsResponse.volume_30day));
+  display.drawString(2, 45, "L:");
+  display.drawString(15, 45, formatCurrency(statsResponse.low));  
+  display.drawString(2, 54, "H:");
+  display.drawString(15, 54, formatCurrency(statsResponse.high));
+  // c++ char formatting using +/- sign
+  char percent_change_7d[8] = "N/A";
+  if (holdings[index].weekAgoPriceResponse.open) {
+    snprintf(percent_change_7d, sizeof(percent_change_7d), "%+3.1f", (tickerResponse.price / holdings[index].weekAgoPriceResponse.open - 1) * 100);
+  }
+  display.drawString(55, 45, "7day: ");
+  display.drawString(82, 45, String(percent_change_7d) + "%");
+  // c++ char formatting using +/- sign
+  char percent_change_YTD[8] = "N/A";
+  if (holdings[index].YTDPriceResponse.open) {
+    snprintf(percent_change_YTD, sizeof(percent_change_YTD), "%+3.1f", (tickerResponse.price / holdings[index].YTDPriceResponse.open - 1) * 100);
+  }
+  display.drawString(55, 54, "YTD: ");
+  display.drawString(82, 54, String(percent_change_YTD) + "%");
  
   if (holdings[index].newPrice < holdings[index].oldPrice) {
     display.fillTriangle(110, 29, 124, 29, 117, 36);
@@ -592,7 +626,7 @@ bool isCPThreshReached (int index) {
   (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice)) {    
     result = holdings[index].priceCheckpoint == 0.0 ? false : true;
     holdings[index].priceCheckpoint = holdings[index].newPrice;
-    Serial.print("New price checkpoint:");
+    Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
     Serial.println(holdings[index].priceCheckpoint);
   }
   return result;
@@ -607,7 +641,6 @@ void displayMessage(String message){
 }
 
 String formatCurrency(float price) {
-//  String formattedCurrency = CURRENCY_SYMBOL;
   String formattedCurrency = "";
   int pointsAfterDecimal;
   if (price > 1000) {
@@ -624,31 +657,63 @@ String formatCurrency(float price) {
 }
 
 String formatVolume(float volume) {
-  if (volume <= 999) {
+  if (volume <= 999.9) {
     return String(volume, 1);
-  } else if (volume > 999) {
+  } else if (volume > 999.9 and volume <= 999999.9) {
     return String(volume/1000.0, 1) + "k";
-  } else if (volume > 999999) {
+  } else if (volume > 999999.9 and volume <= 999999999.9) {
     return String(volume/1000000.0, 1) + "M";
-  } else if (volume > 999999999) {
+  } else if (volume > 999999999.9) {
     return String(volume/1000000000.0, 1) + "G";
   }
+}
+
+void updateDate(void) {
+  timeClient.update();
+  unsigned long epochTime = timeClient.getEpochTime();
+  dateWeekAgo = timeClient.getFormattedDate(epochTime - 604800L);
+  dateWeekAgo.remove(dateWeekAgo.indexOf("T"));
+  currentYear = timeClient.getFormattedDate().substring(0, 4);
+
+  Serial.print("Current time: ");
+  Serial.println(timeClient.getFormattedTime());  
+  Serial.print("Current date: ");
+  Serial.println(timeClient.getFormattedDate());  
+  Serial.print("Week ago date: ");
+  Serial.println(dateWeekAgo);  
 }
 
 bool loadDataForHolding(int index, unsigned long timeNow) {
   int nextIndex = getNextIndex();
   if (nextIndex > -1 ) {
     holdings[index].lastTickerResponse = api.GetTickerInfo(holdings[index].tickerId);
-    // stats reading every 30 s
+    // stats reading every 30 s or more
     if (holdings[index].statsReadDue < timeNow) {
       holdings[index].lastStatsResponse = api.GetStatsInfo(holdings[index].tickerId);
-      holdings[index].statsReadDue = timeNow + 30000;
+      holdings[index].statsReadDue = timeNow + MINUTE_INTERVAL / 2;
     }    
-    if (holdings[index].lastTickerResponse.error != "" || holdings[index].lastStatsResponse.error != "") {
+    if (holdings[index].weekAgoPriceReadDue < timeNow) {
+      holdings[index].weekAgoPriceResponse = api.GetCandlesInfo(holdings[index].tickerId, dateWeekAgo);
+      holdings[index].weekAgoPriceReadDue = timeNow + HOUR_INTERVAL;
+    }
+    if (holdings[index].YTDPriceReadDue < timeNow) {
+      holdings[index].YTDPriceResponse = api.GetCandlesInfo(holdings[index].tickerId, currentYear + "-01-01");
+      holdings[index].YTDPriceReadDue = timeNow + DAY_INTERVAL / 2;
+    }
+    if (holdings[index].lastTickerResponse.error != "") {
       Serial.println("holdings[index].lastTickerResponse: " + String(holdings[index].lastTickerResponse.error));
+    }
+    if (holdings[index].lastStatsResponse.error != "") {
       Serial.println("holdings[index].lastStatsResponse: " + String(holdings[index].lastStatsResponse.error));
     }
-    return (holdings[index].lastTickerResponse.error == "" && holdings[index].lastStatsResponse.error == "");
+    if (holdings[index].weekAgoPriceResponse.error != "") {
+      Serial.println("holdings[index].weekAgoPriceResponse: " + String(holdings[index].weekAgoPriceResponse.error));
+    }
+    if (holdings[index].YTDPriceResponse.error != "") {
+      Serial.println("holdings[index].YTDPriceResponse: " + String(holdings[index].YTDPriceResponse.error));
+    }
+    return (holdings[index].lastTickerResponse.error == "" && holdings[index].lastStatsResponse.error == "" 
+    && holdings[index].weekAgoPriceResponse.error == "" && holdings[index].YTDPriceResponse.error == "");
   }
 
   return false;
@@ -656,15 +721,18 @@ bool loadDataForHolding(int index, unsigned long timeNow) {
 
 void loop() {
 
-  // Call the double reset detector loop method every so often,
   // so that it can recognise when the timeout expires.
   // You can also call drd.stop() when you wish to no longer
   // consider the next reset as a double reset.
   drd.loop();
 
-
   unsigned long timeNow = millis();
-  if ((timeNow > screenChangeDue))  {
+  if (timeNow > checkDateTimeInterval) {
+    updateDate();    
+    // check date and time every hour
+    checkDateTimeInterval = timeNow + HOUR_INTERVAL;
+  }
+  if ((timeNow > screenChangeDue))  {    
     currentIndex = getNextIndex();
     if (currentIndex > -1) {
 //      Serial.print("Current holding index: ");
@@ -674,7 +742,7 @@ void loop() {
         dataNotLoadedCounter = 0;
       } else {
         dataNotLoadedCounter++;
-        Serial.println("Number of data loading errors in a row: ");
+        Serial.print("Number of data loading errors in a row: ");
         Serial.println(dataNotLoadedCounter);
       }
       if (dataNotLoadedCounter > 5) {

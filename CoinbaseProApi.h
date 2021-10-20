@@ -40,6 +40,11 @@ struct CBPStatsResponse{
   String error;
 };
 
+struct CBPCandlesResponse{
+  float open;
+  String error;
+};
+
 
 class CoinbaseProApi
 {
@@ -48,11 +53,13 @@ class CoinbaseProApi
     String SendGetToCoinbasePro(String command);
     CBPTickerResponse GetTickerInfo(String coinId);
     CBPStatsResponse GetStatsInfo(String coinId);
+    CBPCandlesResponse GetCandlesInfo(String tickerId, String date);
     int Port = 443;
 
   private:
     CBPTickerResponse responseTickerObject;
     CBPStatsResponse responseStatsObject;
+    CBPCandlesResponse responseCandlesObject;
     WiFiClientSecure *client;
     void closeClient();
 };
