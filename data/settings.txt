@@ -16,5 +16,7 @@
   "cryptos10" : "null",
   "cryptos11" : "null",
   "cryptos12" : "null",
-  "cryptos13" : "null"
+  "cryptos13" : "null",
+  "cryptos14" : "null",
+  "cryptos15" : "null"
 }

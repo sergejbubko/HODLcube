@@ -69,7 +69,7 @@
 #define MAX_HOLDINGS 5
 
 // number of crypto showing in config portal
-#define CRYPTO_COUNT 14
+#define PAIRS_COUNT 16
 
 // Number of seconds after reset during which a 
 // subseqent reset will be considered a double reset.
@@ -125,7 +125,7 @@ struct Settings {
 // Rate Limits: https://docs.cloud.coinbase.com/exchange/docs/rate-limits
 // We throttle public endpoints by IP: 10 requests per second, up to 15 requests per second in bursts. Some endpoints may have custom rate limits.
   unsigned long screenChangeDelay; // milis
-  String cryptos[CRYPTO_COUNT];
+  String pair[PAIRS_COUNT];
 };
 
 const char *filename = "/settings.txt";
@@ -135,16 +135,21 @@ Settings settings;                         // <- global settings object
 void loadSettings(const char *filename, Settings &settings) {
   // Open file for reading
   File file = SPIFFS.open(filename, "r");
+  if (!file) {
+    Serial.println(F("ERR: Failed to read file"));
+    return;
+  }
 
   // Allocate a temporary JsonDocument
   // Don't forget to change the capacity to match your requirements.
-  // Use arduinojson.org/v6/assistant to compute the capacity.
-  StaticJsonDocument<512> doc;
+  // Use www.arduinojson.org/v6/assistant to compute the capacity.
+  StaticJsonDocument<768> doc;
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
   if (error) {
-    Serial.println(F("Failed to read file, using default settings"));
+    Serial.print(F("ERR: Failed to deserialize json - "));
+    Serial.println(error.f_str());
   }
 
   // Copy values from the JsonDocument to the Config
@@ -154,23 +159,13 @@ void loadSettings(const char *filename, Settings &settings) {
   settings.buzzTickThresh = doc["buzzTickThresh"] | 0.01; 
   // threshold for daily price change in percent
   settings.buzzCPThresh = doc["buzzCPThresh"] | 5;
-  // time in milis to reload new prices and/or another crypto from saved list
+  // time in milis to reload new prices and/or another pair from list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
   // list of cryptocurrencies to choose from
-  settings.cryptos[0] = String(doc["cryptos0"] | "btc-usd");
-  settings.cryptos[1] = String(doc["cryptos1"]);  
-  settings.cryptos[2] = String(doc["cryptos2"]);  
-  settings.cryptos[3] = String(doc["cryptos3"]);  
-  settings.cryptos[4] = String(doc["cryptos4"]);  
-  settings.cryptos[5] = String(doc["cryptos5"]);
-  settings.cryptos[6] = String(doc["cryptos6"]);
-  settings.cryptos[7] = String(doc["cryptos7"]); 
-  settings.cryptos[8] = String(doc["cryptos8"]);
-  settings.cryptos[9] = String(doc["cryptos9"]);  
-  settings.cryptos[10] = String(doc["cryptos10"]); 
-  settings.cryptos[11] = String(doc["cryptos11"]); 
-  settings.cryptos[12] = String(doc["cryptos12"]); 
-  settings.cryptos[13] = String(doc["cryptos13"]); 
+  settings.pair[0] = String(doc["pair0"] | "btc-usd");  
+  for (int i = 1; i < PAIRS_COUNT; i++) {
+    settings.pair[i] = String(doc["pair" + String(i)]);  
+  }
   
 // Close the file
   file.close();
@@ -184,38 +179,33 @@ void saveSettings(const char *filename, const Settings &settings) {
   // Open file for writing
   File file = SPIFFS.open(filename, "w");
   if (!file) {
-    Serial.println(F("Failed to create file"));
+    Serial.println(F("ERR: Failed to create file"));
     return;
   }
 
   // Allocate a temporary JsonDocument
   // Don't forget to change the capacity to match your requirements.
-  // Use arduinojson.org/assistant to compute the capacity.
-  StaticJsonDocument<384> doc;
-
+  // Use www.arduinojson.org/assistant to compute the capacity.
+  StaticJsonDocument<512> doc;
+  
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, file);
+  if (error) {
+    Serial.print(F("ERR: Failed to deserialize json - "));
+    Serial.println(error.f_str());
+  }
   // Set the values in the document 
   doc["LEDtickThresh"] = settings.LEDtickThresh;
   doc["buzzTickThresh"] = settings.buzzTickThresh;
   doc["buzzCPThresh"] = settings.buzzCPThresh;
   doc["screenChangeDelay"] = settings.screenChangeDelay;  
-  doc["cryptos0"] = settings.cryptos[0];
-  doc["cryptos1"] = settings.cryptos[1];  
-  doc["cryptos2"] = settings.cryptos[2];  
-  doc["cryptos3"] = settings.cryptos[3];  
-  doc["cryptos4"] = settings.cryptos[4];  
-  doc["cryptos5"] = settings.cryptos[5];
-  doc["cryptos6"] = settings.cryptos[6];
-  doc["cryptos7"] = settings.cryptos[7];  
-  doc["cryptos8"] = settings.cryptos[8];
-  doc["cryptos9"] = settings.cryptos[9];  
-  doc["cryptos10"] = settings.cryptos[10];  
-  doc["cryptos11"] = settings.cryptos[11];  
-  doc["cryptos12"] = settings.cryptos[12];  
-  doc["cryptos13"] = settings.cryptos[13];  
+  for (int i = 0; i < PAIRS_COUNT; i++) {
+    doc["pair" + String(i)] = settings.pair[i];
+  } 
   
   // Serialize JSON to file
   if (serializeJson(doc, file) == 0) {
-    Serial.println(F("Failed to write to file"));
+    Serial.println(F("ERR: Failed to serialize json to file"));
   }
   // Close the file
   file.close();
@@ -226,7 +216,7 @@ void printFile(const char *filename) {
   // Open file for reading
   File file = SPIFFS.open(filename, "r");
   if (!file) {
-    Serial.println(F("Failed to read file"));
+    Serial.println(F("ERR: Failed to read file"));
     return;
   }
 
@@ -271,9 +261,16 @@ String processor(const String& var){
   if(var == PARAM_BUZZCPTHRESH){
     return String(settings.buzzCPThresh);
   }
-  for (int i = 0; i < CRYPTO_COUNT; i++) {
-    if(var == settings.cryptos[i]){
+  for (int i = 0; i < PAIRS_COUNT; i++) {
+    if(var == settings.pair[i]){
       return "checked";
+    }
+  }
+  for (int i = 0; i < MAX_HOLDINGS; i++) {
+    if (holdings[i].inUse) {
+      if(var == "currCheckpoint_" + holdings[i].tickerId) {
+        return "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[i].priceCheckpoint) + "</small>";
+      }
     }
   }
   for (int i = 0; i < 3; i++) {
@@ -393,10 +390,10 @@ void setup() {
   printFile(filename);
 
   int j = 0;
-  for (int i = 0; i < CRYPTO_COUNT; i++) {
-    if (settings.cryptos[i] != "null" && j < MAX_HOLDINGS) {
-      Serial.println("Added #" + String(j) + ":" + settings.cryptos[i]);
-      addNewHolding(settings.cryptos[i]);
+  for (int i = 0; i < PAIRS_COUNT; i++) {
+    if (settings.pair[i] != "null" && j < MAX_HOLDINGS) {
+      Serial.println("Added #" + String(j) + ":" + settings.pair[i]);
+      addNewHolding(settings.pair[i]);
       j++;
     }
   }
@@ -433,12 +430,12 @@ void setup() {
     if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
       settings.screenChangeDelay = (long)request->getParam(PARAM_SCREENCHANGEDELAY)->value().toInt();
     }
-    for (int i = 0; i < CRYPTO_COUNT; i++) {
-      String param = "crypto" + String(i);
+    for (int i = 0; i < PAIRS_COUNT; i++) {
+      String param = "pair" + String(i);
       if (request->hasParam(param)) {
-        settings.cryptos[i] = request->getParam(param)->value();
+        settings.pair[i] = request->getParam(param)->value();
       } else {
-        settings.cryptos[i] = "null";
+        settings.pair[i] = "null";
       }
     }
     Serial.println(F("Saving configuration..."));
@@ -522,7 +519,7 @@ void displayHolding(int index) {
   if (holdings[index].weekAgoPriceResponse.open) {
     snprintf(percent_change_7d, sizeof(percent_change_7d), "%+3.1f", (tickerResponse.price / holdings[index].weekAgoPriceResponse.open - 1) * 100);
   }
-  display.drawString(55, 45, "7day: ");
+  display.drawString(55, 45, "7d: ");
   display.drawString(82, 45, String(percent_change_7d) + "%");
   // c++ char formatting using +/- sign
   char percent_change_YTD[8] = "N/A";
@@ -701,16 +698,16 @@ bool loadDataForHolding(int index, unsigned long timeNow) {
       holdings[index].YTDPriceReadDue = timeNow + DAY_INTERVAL / 2;
     }
     if (holdings[index].lastTickerResponse.error != "") {
-      Serial.println("holdings[index].lastTickerResponse: " + String(holdings[index].lastTickerResponse.error));
+      Serial.println("ERR: holdings[index].lastTickerResponse: " + String(holdings[index].lastTickerResponse.error));
     }
     if (holdings[index].lastStatsResponse.error != "") {
-      Serial.println("holdings[index].lastStatsResponse: " + String(holdings[index].lastStatsResponse.error));
+      Serial.println("ERR: holdings[index].lastStatsResponse: " + String(holdings[index].lastStatsResponse.error));
     }
     if (holdings[index].weekAgoPriceResponse.error != "") {
-      Serial.println("holdings[index].weekAgoPriceResponse: " + String(holdings[index].weekAgoPriceResponse.error));
+      Serial.println("ERR: holdings[index].weekAgoPriceResponse: " + String(holdings[index].weekAgoPriceResponse.error));
     }
     if (holdings[index].YTDPriceResponse.error != "") {
-      Serial.println("holdings[index].YTDPriceResponse: " + String(holdings[index].YTDPriceResponse.error));
+      Serial.println("ERR: holdings[index].YTDPriceResponse: " + String(holdings[index].YTDPriceResponse.error));
     }
     return (holdings[index].lastTickerResponse.error == "" && holdings[index].lastStatsResponse.error == "" 
     && holdings[index].weekAgoPriceResponse.error == "" && holdings[index].YTDPriceResponse.error == "");
