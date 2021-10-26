@@ -1,4 +1,4 @@
-# HODLcube
+# HODLcube [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U86QNA9)
 Cryptocurrency ticker connected to Coinbase Pro
 
 ### List of parts
