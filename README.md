@@ -2,7 +2,7 @@
 Cryptocurrency ticker connected to Coinbase Pro
 
 ### List of parts
-- **Wemos D1 mini V3.0** ([link](https://www.aliexpress.com/item/32831353752.html)) or newer **Lolin D1 mini V3.1.0** ([link](https://www.aliexpress.com/item/32529101036.html)). Buying original version with big silver plate and FCC logo on it won't fit!
+- **Wemos D1 mini V3.0** ([link](https://www.aliexpress.com/item/32831353752.html)) or newer **Lolin D1 mini V3.1.0** ([link](https://www.aliexpress.com/item/32529101036.html)). Original version with big silver plate and FCC logo on it won't fit!
 
 ![Inkedd1mini_LI](https://user-images.githubusercontent.com/80581925/138943582-9db08b18-763e-4650-a285-195ba3918348.jpg)
 
