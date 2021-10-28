@@ -34,6 +34,7 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+// this fork is necessary https://github.com/taranais/NTPClient
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 // https://github.com/me-no-dev/ESPAsyncTCP
@@ -56,8 +57,8 @@
 #define SDA_PIN D2
 
 // LEDs
-#define LED_PIN_UP D5
-#define LED_PIN_DOWN D6
+#define GREEN_LED D5
+#define RED_LED D6
 
 // Buzzer
 #define BUZZER_PIN D7
@@ -158,7 +159,7 @@ void loadSettings(const char *filename, Settings &settings) {
   // threshold for difference of last two loaded prices in a row in percent
   settings.buzzTickThresh = doc["buzzTickThresh"] | 0.01; 
   // threshold for daily price change in percent
-  settings.buzzCPThresh = doc["buzzCPThresh"] | 5;
+  settings.buzzCPThresh = doc["buzzCPThresh"] | 5.0;
   // time in milis to reload new prices and/or another pair from list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
   // list of cryptocurrencies to choose from
@@ -188,12 +189,6 @@ void saveSettings(const char *filename, const Settings &settings) {
   // Use www.arduinojson.org/assistant to compute the capacity.
   StaticJsonDocument<512> doc;
   
-  // Deserialize the JSON document
-  DeserializationError error = deserializeJson(doc, file);
-  if (error) {
-    Serial.print(F("ERR: Failed to deserialize json - "));
-    Serial.println(error.f_str());
-  }
   // Set the values in the document 
   doc["LEDtickThresh"] = settings.LEDtickThresh;
   doc["buzzTickThresh"] = settings.buzzTickThresh;
@@ -317,8 +312,8 @@ void setup() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
   while (!Serial) continue;
-  pinMode(LED_PIN_DOWN, OUTPUT);
-  pinMode(LED_PIN_UP, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
   // Initialising the display
@@ -547,81 +542,79 @@ void displayHolding(int index) {
   else if (holdings[index].newPrice > (holdings[index].oldPrice * (1.0 + settings.buzzTickThresh / 100.0)) && holdings[index].oldPrice != 0) {
     buzzerUp();
   }  
-  // TODO add flag or offset to beep only once at period of time (maybe 24h)
-  if (isCPThreshReached(index)) {
-    buzzer();
+  float priceTrend = isCPThreshReached(index);
+  if (priceTrend != 0.0) {
+    buzzer(priceTrend, index);
   }
 }
 
 void LEDdown(){    
   // Flash LED
-  digitalWrite(LED_PIN_DOWN, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_DOWN, LOW);
+  digitalWrite(RED_LED, HIGH);
+  delay(50);
+  digitalWrite(RED_LED, LOW);
 }
 void LEDup(){    
   // Flash LED
-  digitalWrite(LED_PIN_UP, HIGH);
-  delay(150);
-  digitalWrite(LED_PIN_UP, LOW); 
+  digitalWrite(GREEN_LED, HIGH);
+  delay(50);
+  digitalWrite(GREEN_LED, LOW); 
 }
 
-void buzzerSOS(){    
-  // Sound buzzer SOS
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(100);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-  }
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(200);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-  }
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(100);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-  }
-}
-
-void buzzer(){    
-  // Sound buzzer BEEP-BEEP-BEEP
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(200);
-  digitalWrite(BUZZER_PIN, LOW); 
-  delay(150);
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(200);
-  digitalWrite(BUZZER_PIN, LOW);
-  delay(150);
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(200);
-  digitalWrite(BUZZER_PIN, LOW);
+void buzzer(float priceTrend, int index){    
+  // Sound buzzer DI-DI-DI-DI-DI
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(64, 0, "Price alert");
+  display.setFont(ArialMT_Plain_24);
+  String tickerId = holdings[index].tickerId;
+  tickerId.toUpperCase();
+  display.drawString(64, 16, tickerId);
+  char priceChange[6];
+  snprintf(priceChange, sizeof(priceChange), "%+3.1f", priceTrend);
+  display.drawString(64, 40, String(priceChange) + "%");
+  display.display();
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(RED_LED,HIGH) ;
+    digitalWrite(GREEN_LED,HIGH) ;
+    digitalWrite(BUZZER_PIN,HIGH) ;
+    delay (50); 
+    digitalWrite(RED_LED,LOW) ;
+    digitalWrite(GREEN_LED,LOW) ;
+    digitalWrite(BUZZER_PIN,LOW) ;
+    delay (75); 
+  }    
+  delay(10000);
 }
 
 void buzzerUp(){
-  // Sound buzzer BEEP-BEEP
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(75);
-  digitalWrite(BUZZER_PIN, LOW); 
+  // Sound buzzer DI-DI
+  digitalWrite(BUZZER_PIN,HIGH) ;//Turn on active buzzer
+  delay (25); 
+  digitalWrite(BUZZER_PIN,LOW) ; //Turn off active buzzer
+  delay (25); 
+  digitalWrite(BUZZER_PIN,HIGH) ; //Turn on active buzzer
+  delay (50); 
+  digitalWrite(BUZZER_PIN,LOW) ; //Turn off active buzzer
 }
 
 void buzzerDown(){
-  // Sound buzzer BEEP-BEEP
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(220);
-  digitalWrite(BUZZER_PIN, LOW); 
+  // Sound buzzer DI
+  digitalWrite(BUZZER_PIN,HIGH) ; //Turn on active buzzer
+  delay (25); 
+  digitalWrite(BUZZER_PIN,LOW) ; //Turn off active buzzer
 }
 
-bool isCPThreshReached (int index) {  
-  bool result = false;
-  if ((holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) ||
-  (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice)) {    
-    result = holdings[index].priceCheckpoint == 0.0 ? false : true;
+float isCPThreshReached (int index) {  
+  float result = 0.0;
+  if (holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) {
+    result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh;
+    holdings[index].priceCheckpoint = holdings[index].newPrice;
+    Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
+    Serial.println(holdings[index].priceCheckpoint);
+  } else if (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice) {    
+    result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh * (-1.0);
     holdings[index].priceCheckpoint = holdings[index].newPrice;
     Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
     Serial.println(holdings[index].priceCheckpoint);
