@@ -1,6 +1,8 @@
 # HODLcube [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U86QNA9)
 Cryptocurrency ticker connected to Coinbase Pro
 
+<img src="https://user-images.githubusercontent.com/80581925/139483396-476c0094-bfa1-4d6b-baa0-acef892c5fc1.jpeg" width="40%">
+
 ### List of parts
 - **Wemos D1 mini V3.0** ([link](https://www.aliexpress.com/item/32831353752.html)) or newer **Lolin D1 mini V3.1.0** ([link](https://www.aliexpress.com/item/32529101036.html)). Original version with big silver plate and FCC logo on it won't fit!
 
@@ -8,10 +10,11 @@ Cryptocurrency ticker connected to Coinbase Pro
 
 - OLED 1.3" 128x64 display ([link](https://www.aliexpress.com/item/32683094040.html))
 - active 5V buzzer ([link](https://www.aliexpress.com/item/4001112067716.html))
-- 1 pc green LED ([link](https://www.aliexpress.com/item/33015212696.html))
-- 1 pc red LED
-- 1 pc 15R resistor ([link](https://www.aliexpress.com/item/32922643786.html)) for green LED; resistance may vary, see specifications of your LED
-- 1 pc 51R resistor for red LED; resistance may vary, see specifications of your LED
+- 1 pc green LED 5 mm ([link](https://www.aliexpress.com/item/33015212696.html))
+- 1 pc red LED 5 mm
+- 1 pc 15R resistor 0.25 W ([link](https://www.aliexpress.com/item/32922643786.html)) for green LED; resistance may vary, see specifications of your LED
+- 1 pc 51R resistor 0.25 W for red LED; resistance may vary, see specifications of your LED. You can use a calculator like [this](https://www.digikey.com/en/resources/conversion-calculators/conversion-calculator-led-series-resistor)
+
 - female to female dupont cables ([link](https://www.aliexpress.com/item/1699285992.html))
 - 28AWG wires ([link](https://www.aliexpress.com/item/4001178609999.html)) 24AWG - 28AWG should be fine, using colours depends on you. You can also reuse dupont cables with removed connectors
 - self-tapping screws with (optional) collar
