@@ -84,24 +84,13 @@
 #define HOUR_INTERVAL 3600000
 #define DAY_INTERVAL 86400000
 
-const char* VER = "v0.3.0";
+const char* VER = "v0.3.1";
 
-char ssidAP[] = "HODLcube";  // SSID of the device
-char pwdAP[] = "toTheMoon";  // password of the device
-
-unsigned long screenChangeDue = 0;
-unsigned long checkDateTimeInterval = 0;
-
-int dataNotLoadedCounter = 0;
-
-String dateWeekAgo = "";
-String currentYear = "";
-
-const char* PARAM_LEDTICKTHRESH = "inputLEDtickThresh";
-const char* PARAM_BUZZTICKTHRESH = "inputBuzzTickThresh";
-const char* PARAM_BUZZCPTHRESH = "inputBuzzCPThresh";
-const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
-const char* PARAM_CURRENCY = "inputCurrency";
+const char* PARAM_LEDTICKTHRESH = "INPUT_LED_TICK_THRESH";
+const char* PARAM_BUZZTICKTHRESH = "INPUT_BUZZ_TICK_THRESH";
+const char* PARAM_BUZZCPTHRESH = "INPUT_BUZZ_CP_THRESH";
+const char* PARAM_SCREENCHANGEDELAY = "INPUT_SCREEN_CHANGE_DELAY";
+const char* PARAM_CURRENCY_PAIRS = "INPUT_CURRENCY_PAIRS";
 
 struct Holding {
   String tickerId;
@@ -129,8 +118,37 @@ struct Settings {
   String pair[PAIRS_COUNT];
 };
 
+struct Pairs {
+  String ticker;
+  String tname;
+};
+
+char ssidAP[] = "HODLcube";  // SSID of the device
+char pwdAP[] = "toTheMoon";  // password of the device
+
+unsigned long screenChangeDue = 0;
+unsigned long checkDateTimeInterval = 0;
+
+int dataNotLoadedCounter = 0;
+
+String dateWeekAgo = "";
+String currentYear = "";
 const char *filename = "/settings.txt";
 Settings settings;                         // <- global settings object
+int currentIndex = -1;
+
+AsyncWebServer server(80);
+WiFiClientSecure clientSSL;
+CoinbaseProApi api(clientSSL);
+DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
+Holding holdings[MAX_HOLDINGS];
+Pairs pairs[PAIRS_COUNT];
+
+SH1106 display(0x3c, SDA_PIN, SCL_PIN);
+
+// Define NTP Client to get time
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 // Loads the settings from a file
 void loadSettings(const char *filename, Settings &settings) {
@@ -225,20 +243,6 @@ void printFile(const char *filename) {
   file.close();
 }
 
-int currentIndex = -1;
-
-AsyncWebServer server(80);
-WiFiClientSecure clientSSL;
-CoinbaseProApi api(clientSSL);
-DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
-Holding holdings[MAX_HOLDINGS];
-
-SH1106 display(0x3c, SDA_PIN, SCL_PIN);
-
-// Define NTP Client to get time
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org");
-
 void notFound(AsyncWebServerRequest *request) {
   request->send(404, "text/plain", "Not found");
 }
@@ -256,22 +260,30 @@ String processor(const String& var){
   if(var == PARAM_BUZZCPTHRESH){
     return String(settings.buzzCPThresh);
   }
-  for (int i = 0; i < PAIRS_COUNT; i++) {
-    if(var == settings.pair[i]){
-      return "checked";
-    }
+  if(var == "SCREEN_CHANGE_DELAY" + String(settings.screenChangeDelay)){
+     return "selected";
   }
-  for (int i = 0; i < MAX_HOLDINGS; i++) {
-    if (holdings[i].inUse) {
-      if(var == "currCheckpoint_" + holdings[i].tickerId) {
-        return "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[i].priceCheckpoint) + "</small>";
+  if(var == PARAM_CURRENCY_PAIRS) {
+    String result = "";
+    for (int i = 0; i < PAIRS_COUNT; i++) {
+      result += "<div class='form-check'>"
+           "<input class='pair-checkbox form-check-input' type='checkbox' name='pair" + String(i) + "' value='" + pairs[i].ticker + "'";
+      if (settings.pair[i] == pairs[i].ticker ) {
+        result += " checked";
       }
+      result += ">"
+           "<label for='pair" + String(i) + "' class='form-check-label'>" + pairs[i].tname + "</label>";
+      if (settings.pair[i] == pairs[i].ticker ) {
+        for (int j = 0; j < MAX_HOLDINGS; j++) {
+          if (holdings[j].inUse && holdings[j].tickerId == pairs[i].ticker) {
+            result += "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[j].priceCheckpoint) + "</small>";
+            break;
+          }
+        }
+      }
+      result += "</div>";
     }
-  }
-  for (int i = 0; i < 3; i++) {
-    if(var == "screenChangeDelay" + String(settings.screenChangeDelay)){
-      return "selected";
-    }
+    return result;
   }
   return String();
 }
@@ -309,6 +321,22 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 }
 
 void setup() {
+  pairs[0] = {"btc-usd", "Bitcoin - US Dollar"};
+  pairs[1] = {"btc-eur", "Bitcoin - Euro"};
+  pairs[2] = {"btc-gbp", "Bitcoin - British Pound"};
+  pairs[3] = {"eth-btc", "Ethereum - Bitcoin"};
+  pairs[4] = {"eth-usd", "Ethereum - US Dollar"};
+  pairs[5] = {"eth-eur", "Ethereum - Euro"};
+  pairs[6] = {"eth-gbp", "Ethereum - British Pound"};
+  pairs[7] = {"ltc-usd", "Litecoin - US Dollar"};
+  pairs[8] = {"ltc-eur", "Litecoin - Euro"};
+  pairs[9] = {"ltc-gbp", "Litecoin - British Pound"};
+  pairs[10] = {"ada-usd", "Cardano - US Dollar"};
+  pairs[11] = {"ada-eur", "Cardano - Euro"};
+  pairs[12] = {"ada-gbp", "Cardano - British Pound"};
+  pairs[13] = {"sol-usd", "Solana - US Dollar"};
+  pairs[14] = {"sol-eur", "Solana - Euro"};
+  pairs[15] = {"sol-gbp", "Solana - British Pound"};
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
   while (!Serial) continue;
