@@ -86,11 +86,10 @@
 
 const char* VER = "v0.3.1";
 
-const char* PARAM_LEDTICKTHRESH = "INPUT_LED_TICK_THRESH";
-const char* PARAM_BUZZTICKTHRESH = "INPUT_BUZZ_TICK_THRESH";
-const char* PARAM_BUZZCPTHRESH = "INPUT_BUZZ_CP_THRESH";
-const char* PARAM_SCREENCHANGEDELAY = "INPUT_SCREEN_CHANGE_DELAY";
-const char* PARAM_CURRENCY_PAIRS = "INPUT_CURRENCY_PAIRS";
+const char* PARAM_LEDTICKTHRESH = "inputLEDtickThresh";
+const char* PARAM_BUZZTICKTHRESH = "inputBuzzTickThresh";
+const char* PARAM_BUZZCPTHRESH = "inputBuzzCPThresh";
+const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
 
 struct Holding {
   String tickerId;
@@ -118,11 +117,6 @@ struct Settings {
   String pair[PAIRS_COUNT];
 };
 
-struct Pairs {
-  String ticker;
-  String tname;
-};
-
 char ssidAP[] = "HODLcube";  // SSID of the device
 char pwdAP[] = "toTheMoon";  // password of the device
 
@@ -142,7 +136,6 @@ WiFiClientSecure clientSSL;
 CoinbaseProApi api(clientSSL);
 DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
 Holding holdings[MAX_HOLDINGS];
-Pairs pairs[PAIRS_COUNT];
 
 SH1106 display(0x3c, SDA_PIN, SCL_PIN);
 
@@ -224,6 +217,46 @@ void saveSettings(const char *filename, const Settings &settings) {
   file.close();
 }
 
+// Loads the settings from a file
+float loadCheckpointPrice(String filename) {
+  // Open file for reading
+  File file = SPIFFS.open(filename, "r");
+  if (!file) {
+    Serial.print(F("ERR: Failed to read file - "));
+    Serial.println(filename);
+    return 0.0;
+  }
+
+  float fileContent;
+  while(file.available()){
+    fileContent = file.parseFloat();
+  }
+  
+// Close the file
+  file.close();
+  return fileContent;
+}
+
+// Saves the settings to a file
+void saveCheckpointPrice(String filename, const float price) {
+  // Delete existing file, otherwise the settings is appended to the file
+  SPIFFS.remove(filename);
+
+  // Open file for writing
+  File file = SPIFFS.open(filename, "w");
+  if (!file) {
+    Serial.println(F("ERR: Failed to create file"));
+    return;
+  }
+
+  if(!file.print(price)){
+    Serial.println(F("ERR: write failed "));
+    Serial.println(file.name());
+  }
+  // Close the file
+  file.close();
+}
+
 // Prints the content of a file to the Serial
 void printFile(const char *filename) {
   // Open file for reading
@@ -251,39 +284,29 @@ void notFound(AsyncWebServerRequest *request) {
 // it looks for variables in format %var_name%
 String processor(const String& var){
   //Serial.println(var);
-  if(var == PARAM_LEDTICKTHRESH){
+  if(var == "INPUT_LED_TICK_THRESH"){
     return String(settings.LEDtickThresh);
   }
-  if(var == PARAM_BUZZTICKTHRESH){
+  if(var == "INPUT_BUZZ_TICK_THRESH"){
     return String(settings.buzzTickThresh);
   }
-  if(var == PARAM_BUZZCPTHRESH){
+  if(var == "INPUT_BUZZ_CP_THRESH"){
     return String(settings.buzzCPThresh);
   }
   if(var == "SCREEN_CHANGE_DELAY" + String(settings.screenChangeDelay)){
      return "selected";
   }
-  if(var == PARAM_CURRENCY_PAIRS) {
-    String result = "";
-    for (int i = 0; i < PAIRS_COUNT; i++) {
-      result += "<div class='form-check'>"
-           "<input class='pair-checkbox form-check-input' type='checkbox' name='pair" + String(i) + "' value='" + pairs[i].ticker + "'";
-      if (settings.pair[i] == pairs[i].ticker ) {
-        result += " checked";
-      }
-      result += ">"
-           "<label for='pair" + String(i) + "' class='form-check-label'>" + pairs[i].tname + "</label>";
-      if (settings.pair[i] == pairs[i].ticker ) {
-        for (int j = 0; j < MAX_HOLDINGS; j++) {
-          if (holdings[j].inUse && holdings[j].tickerId == pairs[i].ticker) {
-            result += "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[j].priceCheckpoint) + "</small>";
-            break;
-          }
-        }
-      }
-      result += "</div>";
+  for (int i = 0; i < PAIRS_COUNT; i++) {
+  if(var == settings.pair[i]){
+    return "checked";
     }
-    return result;
+  }
+  for (int i = 0; i < MAX_HOLDINGS; i++) {
+    if (holdings[i].inUse) {
+      if(var == "currCheckpoint_" + holdings[i].tickerId) {
+        return "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[i].priceCheckpoint) + "</small>";
+      }
+    }
   }
   return String();
 }
@@ -297,12 +320,12 @@ void addNewHolding(String tickerId, float newPrice = 0, float oldPrice = 0) {
     holdings[index].inUse = true;
     holdings[index].statsReadDue = 0;
     holdings[index].weekAgoPriceReadDue = 0;
-    holdings[index].priceCheckpoint = 0.0;
+    holdings[index].priceCheckpoint = loadCheckpointPrice("/" + tickerId + ".txt");
   }
 }
 
 void configModeCallback (WiFiManager *myWiFiManager) {
-  Serial.println("Entered config mode");
+  Serial.println(F("Entered config mode"));
   Serial.println(WiFi.softAPIP());
 
   Serial.println(myWiFiManager->getConfigPortalSSID());
@@ -321,22 +344,6 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 }
 
 void setup() {
-  pairs[0] = {"btc-usd", "Bitcoin - US Dollar"};
-  pairs[1] = {"btc-eur", "Bitcoin - Euro"};
-  pairs[2] = {"btc-gbp", "Bitcoin - British Pound"};
-  pairs[3] = {"eth-btc", "Ethereum - Bitcoin"};
-  pairs[4] = {"eth-usd", "Ethereum - US Dollar"};
-  pairs[5] = {"eth-eur", "Ethereum - Euro"};
-  pairs[6] = {"eth-gbp", "Ethereum - British Pound"};
-  pairs[7] = {"ltc-usd", "Litecoin - US Dollar"};
-  pairs[8] = {"ltc-eur", "Litecoin - Euro"};
-  pairs[9] = {"ltc-gbp", "Litecoin - British Pound"};
-  pairs[10] = {"ada-usd", "Cardano - US Dollar"};
-  pairs[11] = {"ada-eur", "Cardano - Euro"};
-  pairs[12] = {"ada-gbp", "Cardano - British Pound"};
-  pairs[13] = {"sol-usd", "Solana - US Dollar"};
-  pairs[14] = {"sol-eur", "Solana - Euro"};
-  pairs[15] = {"sol-gbp", "Solana - British Pound"};
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(115200);
   while (!Serial) continue;
@@ -355,7 +362,7 @@ void setup() {
   display.setFont(ArialMT_Plain_10);
   display.drawString(128, 54, VER);
   display.display();
-  delay(2000);
+  //delay(2000);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -373,7 +380,7 @@ void setup() {
   wm.setMenu(menu);
   wm.setAPCallback(configModeCallback);
   if (drd.detectDoubleReset()) {
-    Serial.println("Double Reset Detected");
+    Serial.println(F("Double Reset Detected"));
     wm.setConfigPortalTimeout(120);
 
     if (!wm.startConfigPortal(ssidAP, pwdAP)) {
@@ -383,12 +390,12 @@ void setup() {
       ESP.restart();
     }
   } else {
-    Serial.println("No Double Reset Detected");
+    Serial.println(F("No Double Reset Detected"));
     if (wm.autoConnect(ssidAP, pwdAP)) {
-      Serial.println("connected...yeey :)");
+      Serial.println(F("connected...yeey :)"));
     } else {
-      displayMessage("Connection error. No AP set. Will restart in 10 secs. " 
-      "Follow instructions on screen and set network credentials.");
+      displayMessage(F("Connection error. No AP set. Will restart in 10 secs. " 
+      "Follow instructions on screen and set network credentials."));
       delay(10000);
       ESP.restart();
     }
@@ -396,7 +403,7 @@ void setup() {
 
   // Initialize SPIFFS
   if(!SPIFFS.begin()){
-    Serial.println("An Error has occurred while mounting SPIFFS");
+    Serial.println(F("An Error has occurred while mounting SPIFFS"));
     return;
   }
 
@@ -483,7 +490,7 @@ void setup() {
   // GMT 0 = 0
   timeClient.setTimeOffset(0);
   
-  delay(5000);
+  delay(2000);
 }
 
 int getNextFreeHoldingIndex() {
@@ -533,23 +540,23 @@ void displayHolding(int index) {
   display.drawString(64, 20, formatCurrency(price));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(2, 45, "L:");
+  display.drawString(2, 45, F("L:"));
   display.drawString(15, 45, formatCurrency(statsResponse.low));  
-  display.drawString(2, 54, "H:");
+  display.drawString(2, 54, F("H:"));
   display.drawString(15, 54, formatCurrency(statsResponse.high));
   // c++ char formatting using +/- sign
   char percent_change_7d[8] = "N/A";
   if (holdings[index].weekAgoPriceResponse.open) {
     snprintf(percent_change_7d, sizeof(percent_change_7d), "%+3.1f", (tickerResponse.price / holdings[index].weekAgoPriceResponse.open - 1) * 100);
   }
-  display.drawString(55, 45, "7d: ");
+  display.drawString(55, 45, F("7d: "));
   display.drawString(82, 45, String(percent_change_7d) + "%");
   // c++ char formatting using +/- sign
   char percent_change_YTD[8] = "N/A";
   if (holdings[index].YTDPriceResponse.open) {
     snprintf(percent_change_YTD, sizeof(percent_change_YTD), "%+3.1f", (tickerResponse.price / holdings[index].YTDPriceResponse.open - 1) * 100);
   }
-  display.drawString(55, 54, "YTD: ");
+  display.drawString(55, 54, F("YTD: "));
   display.drawString(82, 54, String(percent_change_YTD) + "%");
  
   if (holdings[index].newPrice < holdings[index].oldPrice) {
@@ -639,11 +646,13 @@ float isCPThreshReached (int index) {
   if (holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) {
     result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh;
     holdings[index].priceCheckpoint = holdings[index].newPrice;
+    saveCheckpointPrice("/" + holdings[index].tickerId + ".txt", holdings[index].newPrice);
     Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
     Serial.println(holdings[index].priceCheckpoint);
   } else if (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice) {    
     result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh * (-1.0);
     holdings[index].priceCheckpoint = holdings[index].newPrice;
+    saveCheckpointPrice("/" + holdings[index].tickerId + ".txt", holdings[index].newPrice);
     Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
     Serial.println(holdings[index].priceCheckpoint);
   }
@@ -693,11 +702,11 @@ void updateDate(void) {
   dateWeekAgo.remove(dateWeekAgo.indexOf("T"));
   currentYear = timeClient.getFormattedDate().substring(0, 4);
 
-  Serial.print("Current time: ");
+  Serial.print(F("Current time: "));
   Serial.println(timeClient.getFormattedTime());  
-  Serial.print("Current date: ");
+  Serial.print(F("Current date: "));
   Serial.println(timeClient.getFormattedDate());  
-  Serial.print("Week ago date: ");
+  Serial.print(F("Week ago date: "));
   Serial.println(dateWeekAgo);  
 }
 
@@ -760,7 +769,7 @@ void loop() {
         dataNotLoadedCounter = 0;
       } else {
         dataNotLoadedCounter++;
-        Serial.print("Number of data loading errors in a row: ");
+        Serial.print(F("Number of data loading errors in a row: "));
         Serial.println(dataNotLoadedCounter);
       }
       if (dataNotLoadedCounter > 5) {
