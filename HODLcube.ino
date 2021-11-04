@@ -20,7 +20,6 @@
 
 #include "CoinbaseProApi.h"
 
-#include "webStrings.h"
 #include "graphic_oledi2c.h"
 
 #include "SH1106.h"
@@ -84,12 +83,7 @@
 #define HOUR_INTERVAL 3600000
 #define DAY_INTERVAL 86400000
 
-const char* VER = "v0.3.1";
-
-const char* PARAM_LEDTICKTHRESH = "inputLEDtickThresh";
-const char* PARAM_BUZZTICKTHRESH = "inputBuzzTickThresh";
-const char* PARAM_BUZZCPTHRESH = "inputBuzzCPThresh";
-const char* PARAM_SCREENCHANGEDELAY = "inputScreenChangeDelay";
+const char* VER = "v0.4.0";
 
 struct Holding {
   String tickerId;
@@ -114,7 +108,7 @@ struct Settings {
 // Rate Limits: https://docs.cloud.coinbase.com/exchange/docs/rate-limits
 // We throttle public endpoints by IP: 10 requests per second, up to 15 requests per second in bursts. Some endpoints may have custom rate limits.
   unsigned long screenChangeDelay; // milis
-  String pair[PAIRS_COUNT];
+  String pairs[MAX_HOLDINGS];
 };
 
 char ssidAP[] = "HODLcube";  // SSID of the device
@@ -174,9 +168,9 @@ void loadSettings(const char *filename, Settings &settings) {
   // time in milis to reload new prices and/or another pair from list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
   // list of cryptocurrencies to choose from
-  settings.pair[0] = String(doc["pair0"] | "btc-usd");  
-  for (int i = 1; i < PAIRS_COUNT; i++) {
-    settings.pair[i] = String(doc["pair" + String(i)]);  
+  settings.pairs[0] = String(doc["pair0"] | "btc-usd");  
+  for (int i = 1; i < MAX_HOLDINGS; i++) {
+    settings.pairs[i] = String(doc["pair" + String(i)]);  
   }
   
 // Close the file
@@ -205,8 +199,8 @@ void saveSettings(const char *filename, const Settings &settings) {
   doc["buzzTickThresh"] = settings.buzzTickThresh;
   doc["buzzCPThresh"] = settings.buzzCPThresh;
   doc["screenChangeDelay"] = settings.screenChangeDelay;  
-  for (int i = 0; i < PAIRS_COUNT; i++) {
-    doc["pair" + String(i)] = settings.pair[i];
+  for (int i = 0; i < MAX_HOLDINGS; i++) {
+    doc["pair" + String(i)] = settings.pairs[i];
   } 
   
   // Serialize JSON to file
@@ -296,11 +290,15 @@ String processor(const String& var){
   if(var == "SCREEN_CHANGE_DELAY" + String(settings.screenChangeDelay)){
      return "selected";
   }
-  for (int i = 0; i < PAIRS_COUNT; i++) {
-  if(var == settings.pair[i]){
-    return "checked";
+  // ->> TODO
+  if(var == "CURRENCY_PAIRS") {
+    String result = "";
+    for (int i = 0; i < MAX_HOLDINGS; i++) {
+      result += "'" + settings.pairs[i] + "',";
     }
+    return result;
   }
+  // <--
   for (int i = 0; i < MAX_HOLDINGS; i++) {
     if (holdings[i].inUse) {
       if(var == "currCheckpoint_" + holdings[i].tickerId) {
@@ -419,12 +417,10 @@ void setup() {
   Serial.println(F("Print config file..."));
   printFile(filename);
 
-  int j = 0;
-  for (int i = 0; i < PAIRS_COUNT; i++) {
-    if (settings.pair[i] != "null" && j < MAX_HOLDINGS) {
-      Serial.println("Added #" + String(j) + ":" + settings.pair[i]);
-      addNewHolding(settings.pair[i]);
-      j++;
+  for (int i = 0; i < MAX_HOLDINGS; i++) {
+    if (settings.pairs[i] != "null") {
+      Serial.println("Added #" + String(i) + ":" + settings.pairs[i]);
+      addNewHolding(settings.pairs[i]);
     }
   }
   IPAddress ip = WiFi.localIP();
@@ -441,31 +437,29 @@ void setup() {
 
   // Send web page with input fields to client
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
   // Send a GET request to <ESP_IP>/get?inputString=<inputMessage>
   server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    String inputMessage = "";
     // GET inputLEDtickThresh value on <ESP_IP>/get?inputLEDtickThresh=<inputMessage>
-    if (request->hasParam(PARAM_LEDTICKTHRESH)) {
-      settings.LEDtickThresh = (float)request->getParam(PARAM_LEDTICKTHRESH)->value().toFloat();
-    }
-    if (request->hasParam(PARAM_BUZZTICKTHRESH)) {
-      settings.buzzTickThresh = request->getParam(PARAM_BUZZTICKTHRESH)->value().toFloat();
-    }
-    if (request->hasParam(PARAM_BUZZCPTHRESH)) {
-      settings.buzzCPThresh = request->getParam(PARAM_BUZZCPTHRESH)->value().toFloat();
-    }
-    if (request->hasParam(PARAM_SCREENCHANGEDELAY)) {
-      settings.screenChangeDelay = (long)request->getParam(PARAM_SCREENCHANGEDELAY)->value().toInt();
-    }
-    for (int i = 0; i < PAIRS_COUNT; i++) {
-      String param = "pair" + String(i);
-      if (request->hasParam(param)) {
-        settings.pair[i] = request->getParam(param)->value();
-      } else {
-        settings.pair[i] = "null";
+    int params = request->params();
+    int j = 0;
+    for(int i=0;i<params;i++) {
+      AsyncWebParameter* p = request->getParam(i);
+      if (p->name() == "inputLEDtickThresh") {
+        settings.LEDtickThresh = p->value().toFloat();
+      } else if (p->name() == "inputBuzzTickThresh") {
+        settings.buzzTickThresh = p->value().toFloat();
+      } else if (p->name() == "inputBuzzCPThresh") {
+        settings.buzzCPThresh = p->value().toFloat();
+      } else if (p->name() == "inputScreenChangeDelay") {
+        settings.screenChangeDelay = (long)p->value().toInt();
+      } else if (p->name() == "inputCurrencyPairs") {
+        if (j < MAX_HOLDINGS) {
+          settings.pairs[j] = p->value();
+          j++;
+        }
       }
     }
     Serial.println(F("Saving configuration..."));
@@ -475,7 +469,7 @@ void setup() {
     Serial.println(F("Print config file..."));
     printFile(filename);
     
-    request->send(200, "text/text", inputMessage);
+    request->send(200);
     ESP.restart();
   });
   server.onNotFound(notFound);
