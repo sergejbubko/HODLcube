@@ -33,6 +33,8 @@ Cryptocurrency ticker connected to Coinbase Pro
 Parts are free to download on [thingiverse](https://www.thingiverse.com/thing:5031142)
 1. Print the top part of the HODLcube from white translucent filament. [White PETG from Sunlu](https://www.aliexpress.com/item/32957585470.html) is recommended. It depends on your experience. This part has to be translucent but don't have to be transparent. LED light have to go through easily.
 2. Print the rest five parts from PLA/PETG filament with colour of your choice
+<img src="https://user-images.githubusercontent.com/80581925/140551939-ab6cee3a-f493-4de6-b735-c59fc113ee39.jpg" width="30%">
+
 
 ### Soldering
 *see scheme for cable lenghts and colours*
