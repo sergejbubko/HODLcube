@@ -168,7 +168,7 @@ void loadSettings(const char *filename, Settings &settings) {
   // time in milis to reload new prices and/or another pair from list
   settings.screenChangeDelay = doc["screenChangeDelay"] | 5000;  
   // list of cryptocurrencies to choose from
-  settings.pairs[0] = String(doc["pair0"] | "btc-usd");  
+  settings.pairs[0] = String(doc["pair0"] | "BTC-USD");  
   for (int i = 1; i < MAX_HOLDINGS; i++) {
     settings.pairs[i] = String(doc["pair" + String(i)]);  
   }
@@ -290,7 +290,6 @@ String processor(const String& var){
   if(var == "SCREEN_CHANGE_DELAY" + String(settings.screenChangeDelay)){
      return "selected";
   }
-  // ->> TODO
   if(var == "CURRENCY_PAIRS") {
     String result = "";
     for (int i = 0; i < MAX_HOLDINGS; i++) {
@@ -298,13 +297,20 @@ String processor(const String& var){
     }
     return result;
   }
-  // <--
-  for (int i = 0; i < MAX_HOLDINGS; i++) {
-    if (holdings[i].inUse) {
-      if(var == "currCheckpoint_" + holdings[i].tickerId) {
-        return "<small class='form-text text-muted'>Current checkpoint: " + String(holdings[i].priceCheckpoint) + "</small>";
+  if (var == "CURRENCY_CHECKPOINTS") {
+    String result = "";
+    for (int i = 0; i < MAX_HOLDINGS; i++) {
+      if (holdings[i].inUse) {
+         result +=
+         "<div class='mb-2'>"
+            "<label for='chkp_" + holdings[i].tickerId + "' class='col-form-label'>" + holdings[i].tickerId + "</label>"
+            "<div class='mb-2'>"
+              "<input type='number' name='chkp_" + holdings[i].tickerId + "' step='0.01' min='0.01' value='" + String(holdings[i].priceCheckpoint) + "' class='form-control' required>"
+            "</div>"
+          "</div>";
       }
     }
+    return result;
   }
   return String();
 }
@@ -461,6 +467,11 @@ void setup() {
           j++;
         }
       }
+    }    
+    // reset other values
+    while(j < MAX_HOLDINGS) {
+      settings.pairs[j] = "null";
+      j++;
     }
     Serial.println(F("Saving configuration..."));
     saveSettings(filename, settings);

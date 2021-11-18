@@ -41,23 +41,9 @@
           $('#currencyPairs').trigger('change');
         });
         $('#settingsForm').submit(function (event) {
-//          if ($('input.pair-checkbox:checked').length > 0) {
             $('#submitAlert').show();
             setTimeout(location.reload.bind(location), 5000);
-//          } else {
-//            $('#checkBoxAlert').show();
-//            event.preventDefault();
-//          }
         });
-//        var limit = 5;
-//        $('input.pair-checkbox').on('change', function (evt) {
-//          if ($('input.pair-checkbox:checked').length > limit) {
-//            this.checked = false;
-//            $('#checkBoxAlert').show();
-//          } else {
-//            $('#checkBoxAlert').hide();
-//          }
-//        });
       });
     </script>
   </head>
@@ -131,6 +117,7 @@
             <option value="ETH-BTC">ETH-BTC</option>
           </select>
         </div>
+        %CURRENCY_CHECKPOINTS%
         <h4>Screen</h4>
         <div class='mb-2' id='screenChangeDelay'>
           <label for='inputScreenChangeDelay' class='col-form-label'>Screen change delay</label>
@@ -152,4 +139,4 @@
       <iframe style='display:none' name='hidden-form'></iframe>
     </div>
   </body>
-</html>;
+</html>
