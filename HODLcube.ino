@@ -290,7 +290,6 @@ String processor(const String& var){
   if(var == "SCREEN_CHANGE_DELAY" + String(settings.screenChangeDelay)){
      return "selected";
   }
-  // ->> TODO
   if(var == "CURRENCY_PAIRS") {
     String result = "";
     for (int i = 0; i < MAX_HOLDINGS; i++) {
@@ -298,18 +297,17 @@ String processor(const String& var){
     }
     return result;
   }
-  // <--
-  if(var == "PRICE_CHECKPOINTS") {
-    String result;
+  if (var == "CURRENCY_CHECKPOINTS") {
+    String result = "";
     for (int i = 0; i < MAX_HOLDINGS; i++) {
       if (holdings[i].inUse) {
-        result +=
-        "<div class='mb-2'>"
-          "<label for='pair" + String(i) + "' class='col-form-label'>" + String(holdings[i].tickerId) + "</label>"
-          "<div class='mb-2'>"
-            "<input type='number' name='pair" + String(i) + "' min='0' value='" + String(holdings[i].priceCheckpoint) + "' class='form-control' required>"
-          "</div>"
-        "</div>";
+         result +=
+         "<div class='mb-2'>"
+            "<label for='chkp_" + holdings[i].tickerId + "' class='col-form-label'>" + holdings[i].tickerId + "</label>"
+            "<div class='mb-2'>"
+              "<input type='number' name='chkp_" + holdings[i].tickerId + "' step='0.01' min='0.01' value='" + String(holdings[i].priceCheckpoint) + "' class='form-control' required>"
+            "</div>"
+          "</div>";
       }
     }
     return result;
@@ -469,6 +467,11 @@ void setup() {
           j++;
         }
       }
+    }
+    // reset other values
+    while(j < MAX_HOLDINGS) {
+      settings.pairs[j] = "null";
+      j++;
     }
     Serial.println(F("Saving configuration..."));
     saveSettings(filename, settings);
