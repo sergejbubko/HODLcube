@@ -466,6 +466,13 @@ void setup() {
           settings.pairs[j] = p->value();
           j++;
         }
+      } else if (p->name().startsWith("chkp_")) {
+        for (int i = 0; i < MAX_HOLDINGS; i++) {
+          if (holdings[i].inUse && p->name() == "chkp_" + holdings[i].tickerId) {
+            holdings[i].priceCheckpoint = p->value().toFloat();   
+            saveCheckpointPrice("/" + holdings[i].tickerId + ".txt", holdings[i].priceCheckpoint);
+          }
+        }
       }
     }
     // reset other values
@@ -605,15 +612,14 @@ void buzzer(float priceTrend, int index){
   // Sound buzzer DI-DI-DI-DI-DI
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(64, 0, "Price alert");
   display.setFont(ArialMT_Plain_24);
   String tickerId = holdings[index].tickerId;
   tickerId.toUpperCase();
-  display.drawString(64, 16, tickerId);
+  display.drawString(64, 6, tickerId);
   char priceChange[6];
   snprintf(priceChange, sizeof(priceChange), "%+3.1f", priceTrend);
-  display.drawString(64, 40, String(priceChange) + "%");
+  //display.drawString(64, 21, String(holdings[index].priceCheckpoint) + "->" + String(holdings[index].newPrice));
+  display.drawString(64, 32, String(priceChange) + "%");
   display.display();
   for (int i = 0; i < 5; i++) {
     digitalWrite(RED_LED,HIGH) ;
@@ -625,7 +631,7 @@ void buzzer(float priceTrend, int index){
     digitalWrite(BUZZER_PIN,LOW) ;
     delay (75); 
   }    
-  delay(10000);
+  delay(7500);
 }
 
 void buzzerUp(){
@@ -648,14 +654,9 @@ void buzzerDown(){
 
 float isCPThreshReached (int index) {  
   float result = 0.0;
-  if (holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) {
-    result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh;
-    holdings[index].priceCheckpoint = holdings[index].newPrice;
-    saveCheckpointPrice("/" + holdings[index].tickerId + ".txt", holdings[index].newPrice);
-    Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
-    Serial.println(holdings[index].priceCheckpoint);
-  } else if (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice) {    
-    result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : settings.buzzCPThresh * (-1.0);
+  if ((holdings[index].priceCheckpoint * (1.0 + settings.buzzCPThresh / 100) < holdings[index].newPrice) || 
+     (holdings[index].priceCheckpoint * (1.0 - settings.buzzCPThresh / 100) > holdings[index].newPrice)) {
+    result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : (holdings[index].newPrice / holdings[index].priceCheckpoint - 1.0) * 100.0;
     holdings[index].priceCheckpoint = holdings[index].newPrice;
     saveCheckpointPrice("/" + holdings[index].tickerId + ".txt", holdings[index].newPrice);
     Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
