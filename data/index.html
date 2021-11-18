@@ -41,23 +41,9 @@
           $('#currencyPairs').trigger('change');
         });
         $('#settingsForm').submit(function (event) {
-//          if ($('input.pair-checkbox:checked').length > 0) {
             $('#submitAlert').show();
             setTimeout(location.reload.bind(location), 5000);
-//          } else {
-//            $('#checkBoxAlert').show();
-//            event.preventDefault();
-//          }
         });
-//        var limit = 5;
-//        $('input.pair-checkbox').on('change', function (evt) {
-//          if ($('input.pair-checkbox:checked').length > limit) {
-//            this.checked = false;
-//            $('#checkBoxAlert').show();
-//          } else {
-//            $('#checkBoxAlert').hide();
-//          }
-//        });
       });
     </script>
   </head>
@@ -112,7 +98,7 @@
         <div class='collapse' id='collapseHelpBuzzCPThresh'>
           <div class='mb-2 alert alert-info'>This value has to be higher or equal to 0.1. When checkpoint value and current price differs by specified number of percent, 
             buzzer is activated. Initial checkpoint value for each currency pair is equal to first displayed price after device startup. When the threshold is reached, the new 
-            checkpoint is also created. Current price checkpoints are displayed near relevant <a href='#currencyPairs'>currency pairs</a> below.<hr>
+            checkpoint is also created. Current <a href='#priceCheckpoints'>price checkpoints</a> are displayed below.<hr>
             <p class='mb-0'>Example: checkpoint 50&nbsp;000, threshold 5; 50&nbsp;000*(5/100)=2500. When price 52&nbsp;500 or 47&nbsp;500 is reached, 
             a buzzer sounds and a new checkpoint with the current value is also created.</p>
           </div>
@@ -121,8 +107,9 @@
           <div class='mb-2 alert alert-info'>The higher the threshold values, the less often the LEDs (buzzer) activated.
           </div>
         </div>
+        <h4>Currency pairs</h4>
         <div class="form-group">
-          <label for="currencyPairs">Currency pairs</label>
+          <label for="currencyPairs">Display selection</label>
           <select class="form-control" id="currencyPairs" name="inputCurrencyPairs" multiple="multiple" required="required">
             <option value="BTC-USD">BTC-USD</option>
             <option value="BTC-EUR">BTC-EUR</option>
@@ -131,6 +118,8 @@
             <option value="ETH-BTC">ETH-BTC</option>
           </select>
         </div>
+        <h5 id="priceCheckpoints">Price checkpoints</h5>
+        %PRICE_CHECKPOINTS%
         <h4>Screen</h4>
         <div class='mb-2' id='screenChangeDelay'>
           <label for='inputScreenChangeDelay' class='col-form-label'>Screen change delay</label>
