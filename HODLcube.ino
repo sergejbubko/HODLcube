@@ -239,13 +239,18 @@ void saveCheckpointPrice(String filename, const float price) {
   // Open file for writing
   File file = SPIFFS.open(filename, "w");
   if (!file) {
-    Serial.println(F("ERR: Failed to create file"));
+    Serial.println(F("ERR. Failed to create file"));
     return;
   }
 
   if(!file.print(price)){
-    Serial.println(F("ERR: write failed "));
+    Serial.print(F("ERR. File write failed: "));
     Serial.println(file.name());
+  } else {
+    Serial.print(F("New checkpoint saved to file "));
+    Serial.print(file.name());
+    Serial.print("-> ");
+    Serial.println(price);
   }
   // Close the file
   file.close();
@@ -298,9 +303,10 @@ String processor(const String& var){
     return result;
   }
   if (var == "CURRENCY_CHECKPOINTS") {
-    String result = "";
+    String result;
+    result.reserve(1200);
     for (int i = 0; i < MAX_HOLDINGS; i++) {
-      if (holdings[i].inUse) {
+      if (holdings[i].inUse && holdings[i].priceCheckpoint > 0.1) {
          result +=
          "<div class='mb-2'>"
             "<label for='chkp_" + holdings[i].tickerId + "' class='col-form-label'>" + holdings[i].tickerId + "</label>"
@@ -468,7 +474,10 @@ void setup() {
         }
       } else if (p->name().startsWith("chkp_")) {
         for (int i = 0; i < MAX_HOLDINGS; i++) {
-          if (holdings[i].inUse && p->name() == "chkp_" + holdings[i].tickerId) {
+          if (holdings[i].inUse && p->name() == "chkp_" + holdings[i].tickerId &&
+          fabs(holdings[i].priceCheckpoint - p->value().toFloat()) >= 0.01) {
+            Serial.println(holdings[i].priceCheckpoint, 10);
+            Serial.println(p->value().toFloat(), 10);
             holdings[i].priceCheckpoint = p->value().toFloat();   
             saveCheckpointPrice("/" + holdings[i].tickerId + ".txt", holdings[i].priceCheckpoint);
           }
