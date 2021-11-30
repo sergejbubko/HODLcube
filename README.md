@@ -49,7 +49,7 @@ Parts are free to download on [thingiverse](https://www.thingiverse.com/thing:50
 7. Solder 4 Dupont male cables for display
 <img src="https://user-images.githubusercontent.com/80581925/138932764-0c4b71d2-4adf-4e2c-9bf3-c57892522d69.jpg" width="30%">
 
-![schema_hodlCube_en_bb](https://user-images.githubusercontent.com/80581925/138918036-4ffadb0c-3e09-42b0-924e-afa4061b0a62.png)
+![schema_hodlCube_en_bb](https://github.com/sergejbubko/HODLcube/blob/main/wiring%20diagram/schema_hodlCube_en_bb.png)
 
 ### Test
 1. Connect Dupont cables to display (see scheme)
@@ -57,7 +57,11 @@ Parts are free to download on [thingiverse](https://www.thingiverse.com/thing:50
 3. Connect D1 mini using micro USB cable to PC
 4. Download
    - .bin file from [releases](https://github.com/sergejbubko/HODLcube/releases) and use esptool to flash it or visit this [page](https://nerdiy.de/en/howto-esp8266-mit-dem-esptool-bin-dateien-unter-windows-flashen/) for more information about esptool and its alternative with GUI called [ESPEasyFlasher](https://github.com/BattloXX/ESPEasyFlasher)
-   - OR .zip file of this project and using [Arduino IDE](https://www.arduino.cc/en/software) compile it and upload to D1 mini, nice tutorial can be found [here](https://randomnerdtutorials.com/how-to-install-esp8266-board-arduino-ide/) with one difference - select correct board in Board Manager called **LOLIN(WEMOS) D1 R2 & mini**. You also need to include all libraries. You should find them in Library Manager in Arduino IDE or collect them manualy by downloading neccessary archives from github. Links are provided in sourcecode HODLcube.ino next to each included library.
+   - OR .zip file of this project and using [Arduino IDE](https://www.arduino.cc/en/software) compile it and upload to D1 mini, nice tutorial can be found [here](https://randomnerdtutorials.com/how-to-install-esp8266-board-arduino-ide/). In Arduino IDE > Tools don't forget to check that you have selected:
+     - correct board in Board > ESP8266 boards > **LOLIN(WEMOS) D1 R2 & mini**.
+     - **115200** upload speed 
+     
+     You also need to include all libraries. You should find them in Library Manager in Arduino IDE or collect them manualy by downloading neccessary archives from github. Links are provided in sourcecode HODLcube.ino next to each included library.
 
 ### Assembly
 1. Push the LEDs into top 3D printed part. For correct orientation see image below.
