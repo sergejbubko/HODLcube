@@ -20,6 +20,7 @@
 
 #include "CoinbaseProApi.h"
 
+#include "webStrings.h"
 #include "graphic_oledi2c.h"
 
 #include "SH1106.h"
@@ -306,7 +307,7 @@ String processor(const String& var){
     String result;
     result.reserve(1200);
     for (int i = 0; i < MAX_HOLDINGS; i++) {
-      if (holdings[i].inUse && holdings[i].priceCheckpoint > 0.1) {
+      if (holdings[i].inUse && holdings[i].priceCheckpoint >= 0.1) {
          result +=
          "<div class='mb-2'>"
             "<label for='chkp_" + holdings[i].tickerId + "' class='col-form-label'>" + holdings[i].tickerId + "</label>"
@@ -449,7 +450,7 @@ void setup() {
 
   // Send web page with input fields to client
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+    request->send_P(200, "text/html", index_html, processor);
   });
 
   // Send a GET request to <ESP_IP>/get?inputString=<inputMessage>
