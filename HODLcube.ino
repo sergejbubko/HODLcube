@@ -18,7 +18,7 @@
 // Additional Libraries - each one of these will need to be installed.
 // ----------------------------
 
-#include "CoinbaseProApi.h"
+#include "CoinbaseApi.h"
 
 #include "webStrings.h"
 #include "graphic_oledi2c.h"
@@ -84,7 +84,7 @@
 #define HOUR_INTERVAL 3600000
 #define DAY_INTERVAL 86400000
 
-const char* VER = "v0.4.0";
+const char* VER = "v0.4.1";
 
 struct Holding {
   String tickerId;
@@ -128,7 +128,7 @@ int currentIndex = -1;
 
 AsyncWebServer server(80);
 WiFiClientSecure clientSSL;
-CoinbaseProApi api(clientSSL);
+CoinbaseApi api(clientSSL);
 DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
 Holding holdings[MAX_HOLDINGS];
 
