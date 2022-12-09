@@ -1,6 +1,8 @@
 # HODLcube [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U86QNA9)
 Cryptocurrency ticker connected to Coinbase [Buy on Etsy](https://www.etsy.com/listing/1205181193/crypto-ticker-display-hodl-cube?click_key=10d35aab0e97a46f12506ed9d97eca05aedc7571%3A1205181193&click_sum=b9edafc7&ref=shop_home_active_1&pro=1&frs=1)
 
+[Quick Start Guide](https://docs.google.com/document/d/1Tg4MM1jNnUUqZixxY0ZYTSoNqewVLtktd7ysAPqDA4k/edit?usp=sharing) can be found on Google Docs
+
 <img src="https://user-images.githubusercontent.com/80581925/139483396-476c0094-bfa1-4d6b-baa0-acef892c5fc1.jpeg" width="40%">
 
 ### List of parts
