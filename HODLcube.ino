@@ -84,7 +84,7 @@
 #define HOUR_INTERVAL 3600000
 #define DAY_INTERVAL 86400000
 
-const char* VER = "v0.4.1";
+const char* VER = "v0.5.0";
 
 struct Holding {
   String tickerId;
@@ -790,6 +790,9 @@ void loop() {
       }
       if (dataNotLoadedCounter > 5) {
         displayMessage(F("Error loading data. Check wifi connection or increase screen change delay in config."));
+      }
+      if (dataNotLoadedCounter > 20) {
+        ESP.restart();
       }
     } else {
       displayMessage(F("No funds to display. Edit the setup to add them"));
