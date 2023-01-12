@@ -143,7 +143,20 @@ void loadSettings(const char *filename, Settings &settings) {
   // Open file for reading
   File file = SPIFFS.open(filename, "r");
   if (!file) {
-    Serial.println(F("ERR: Failed to read file"));
+    Serial.println(F("ERR: Failed to read file, using default values"));
+    settings.LEDtickThresh = 0.01;
+    // threshold for difference of last two loaded prices in a row in percent
+    settings.buzzTickThresh = 0.01; 
+    // threshold for daily price change in percent
+    settings.buzzCPThresh = 5.0;
+    // time in milis to reload new prices and/or another pair from list
+    settings.screenChangeDelay = 5000;  
+    // list of cryptocurrencies to choose from
+    settings.pairs[0] = String("BTC-USD"); 
+    settings.pairs[1] = String("null"); 
+    settings.pairs[2] = String("null"); 
+    settings.pairs[3] = String("null"); 
+    settings.pairs[4] = String("null"); 
     return;
   }
 
