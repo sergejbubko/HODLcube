@@ -14,11 +14,12 @@ String CoinbaseApi::SendGetToCoinbase(String command) {
   bool currentLineIsBlank = true;
   long now;
   bool avail;
+  int i;
+  int j;
   
   client->setInsecure();
   if (client->connect(COINBASE_HOST, Port)) {
     // Serial.println(".... connected to server");
-    String a="";
     char c;
     int ch_count=0;
     client->println("GET " + command + " HTTP/1.1");
@@ -30,7 +31,7 @@ String CoinbaseApi::SendGetToCoinbase(String command) {
     while (millis()-now<1500) {
       while (client->available()) {
         char c = client->read();
-        //Serial.write(c);
+        // Serial.write(c);
 
         if(!finishedHeaders){
           if (currentLineIsBlank && c == '\n') {
@@ -50,15 +51,27 @@ String CoinbaseApi::SendGetToCoinbase(String command) {
         avail=true;
       }
       if (avail) {
-        // Serial.println("Body:");
-        // Serial.println(body);
-        // Serial.println("END");
+//         Serial.println("Body:");
+//         Serial.println(body);
+//         Serial.println("END");
         break;
       }
     }
+    // search for left curly braces or square brackets
+    for (i = 0; i < ch_count; i++) {
+      if (body.charAt(i) == '{' || body.charAt(i) == '[') {
+        break;
+      }
+    }
+    // search for right curly braces or square brackets
+    for (j = ch_count; j > i; j--) {
+      if (body.charAt(j) == '}' || body.charAt(j) == ']') {
+        break;
+      }   
+    }
   }
-  closeClient();
-  return body;
+  closeClient();  
+  return body.substring(i, j+1);
 }
 
 CBPTickerResponse CoinbaseApi::GetTickerInfo(String tickerId) {
@@ -107,7 +120,7 @@ CBPStatsResponse CoinbaseApi::GetStatsInfo(String tickerId) {
   if (errorStats) {
     responseStatsObject.error = errorStats.f_str();
 //    Serial.print(F("deserializeJson() failed: "));
-//    Serial.println(errorTicker.f_str());
+//    Serial.println(errorStats.f_str());
     return responseStatsObject;
   }
 
@@ -139,7 +152,7 @@ CBPCandlesResponse CoinbaseApi::GetCandlesInfo(String tickerId, String date) {
   if (errorCandles) {
     responseCandlesObject.error = errorCandles.f_str();
 //    Serial.print(F("deserializeJson() failed: "));
-//    Serial.println(errorTicker.f_str());
+//    Serial.println(errorCandles.f_str());
     return responseCandlesObject;
   }
 
