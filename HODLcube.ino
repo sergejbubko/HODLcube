@@ -84,7 +84,7 @@
 #define HOUR_INTERVAL 3600000
 #define DAY_INTERVAL 86400000
 
-const char* VER = "v0.5.0";
+const char* VER = "v0.5.2";
 
 struct Holding {
   String tickerId;
@@ -335,7 +335,7 @@ String processor(const String& var){
   return String();
 }
 
-void addNewHolding(String tickerId, float newPrice = 0, float oldPrice = 0) {
+void addNewHolding(String &tickerId, float newPrice = 0, float oldPrice = 0) {
   int index = getNextFreeHoldingIndex();
   if (index > -1) {
     holdings[index].tickerId = tickerId;
@@ -418,8 +418,7 @@ void setup() {
     if (wm.autoConnect(ssidAP, pwdAP)) {
       Serial.println(F("connected...yeey :)"));
     } else {
-      displayMessage(F("Connection error. No AP set. Will restart in 10 secs. " 
-      "Follow instructions on screen and set network credentials."));
+      displayMessage("Connection error. No AP set. Will restart in 10 secs. Follow instructions on screen and set network credentials.");
       delay(10000);
       ESP.restart();
     }
@@ -445,7 +444,10 @@ void setup() {
 
   for (int i = 0; i < MAX_HOLDINGS; i++) {
     if (settings.pairs[i] != "null") {
-      Serial.println("Added #" + String(i) + ":" + settings.pairs[i]);
+      Serial.print(F("Added #"));
+      Serial.print(i);
+      Serial.print(F(":"));
+      Serial.println(settings.pairs[i]);
       addNewHolding(settings.pairs[i]);
     }
   }
@@ -682,13 +684,14 @@ float isCPThreshReached (int index) {
     result = holdings[index].priceCheckpoint == 0.0 ? 0.0 : (holdings[index].newPrice / holdings[index].priceCheckpoint - 1.0) * 100.0;
     holdings[index].priceCheckpoint = holdings[index].newPrice;
     saveCheckpointPrice("/" + holdings[index].tickerId + ".txt", holdings[index].newPrice);
-    Serial.print(String(holdings[index].tickerId) + " - new price checkpoint: ");
+    Serial.print(holdings[index].tickerId);
+    Serial.print(F(" - new price checkpoint: "));
     Serial.println(holdings[index].priceCheckpoint);
   }
   return result;
 }
 
-void displayMessage(String message){
+void displayMessage(const char *message){
   display.clear();
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -719,7 +722,7 @@ String formatVolume(float volume) {
     return String(volume/1000.0, 1) + "k";
   } else if (volume > 999999.9 and volume <= 999999999.9) {
     return String(volume/1000000.0, 1) + "M";
-  } else if (volume > 999999999.9) {
+  } else {
     return String(volume/1000000000.0, 1) + "G";
   }
 }
@@ -753,20 +756,25 @@ bool loadDataForHolding(int index, unsigned long timeNow) {
       holdings[index].weekAgoPriceReadDue = timeNow + HOUR_INTERVAL;
     }
     if (holdings[index].YTDPriceReadDue < timeNow) {
-      holdings[index].YTDPriceResponse = api.GetCandlesInfo(holdings[index].tickerId, currentYear + "-01-01");
+      currentYear.concat("-01-01");
+      holdings[index].YTDPriceResponse = api.GetCandlesInfo(holdings[index].tickerId, currentYear);
       holdings[index].YTDPriceReadDue = timeNow + DAY_INTERVAL / 2;
     }
     if (holdings[index].lastTickerResponse.error != "") {
-      Serial.println("ERR: holdings[index].lastTickerResponse: " + String(holdings[index].lastTickerResponse.error));
+      Serial.print(F("ERR: holdings[index].lastTickerResponse: "));
+      Serial.println(holdings[index].lastTickerResponse.error);
     }
     if (holdings[index].lastStatsResponse.error != "") {
-      Serial.println("ERR: holdings[index].lastStatsResponse: " + String(holdings[index].lastStatsResponse.error));
+      Serial.print(F("ERR: holdings[index].lastStatsResponse: "));
+      Serial.println(holdings[index].lastStatsResponse.error);
     }
     if (holdings[index].weekAgoPriceResponse.error != "") {
-      Serial.println("ERR: holdings[index].weekAgoPriceResponse: " + String(holdings[index].weekAgoPriceResponse.error));
+      Serial.print(F("ERR: holdings[index].weekAgoPriceResponse: "));
+      Serial.println(holdings[index].weekAgoPriceResponse.error);
     }
     if (holdings[index].YTDPriceResponse.error != "") {
-      Serial.println("ERR: holdings[index].YTDPriceResponse: " + String(holdings[index].YTDPriceResponse.error));
+      Serial.print(F("ERR: holdings[index].YTDPriceResponse: "));
+      Serial.println(holdings[index].YTDPriceResponse.error);
     }
     return (holdings[index].lastTickerResponse.error == "" && holdings[index].lastStatsResponse.error == "" 
     && holdings[index].weekAgoPriceResponse.error == "" && holdings[index].YTDPriceResponse.error == "");
@@ -802,13 +810,13 @@ void loop() {
         Serial.println(dataNotLoadedCounter);
       }
       if (dataNotLoadedCounter > 5) {
-        displayMessage(F("Error loading data. Check wifi connection or increase screen change delay in config."));
+        displayMessage("Error loading data. Check wifi connection or increase screen change delay in config.");
       }
       if (dataNotLoadedCounter > 20) {
         ESP.restart();
       }
     } else {
-      displayMessage(F("No funds to display. Edit the setup to add them"));
+      displayMessage("No funds to display. Edit the setup to add them");
     }
     screenChangeDue = timeNow + settings.screenChangeDelay;
   }
