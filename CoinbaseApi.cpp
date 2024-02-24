@@ -7,7 +7,7 @@ CoinbaseApi::CoinbaseApi(WiFiClientSecure &client)  {
   responseCandlesObject = CBPCandlesResponse();
 }
 
-String CoinbaseApi::SendGetToCoinbase(String command) {
+String CoinbaseApi::SendGetToCoinbase(String &command) {
   String body="";
   body.reserve(700);
   bool finishedHeaders = false;
@@ -74,15 +74,17 @@ String CoinbaseApi::SendGetToCoinbase(String command) {
   return body.substring(i, j+1);
 }
 
-CBPTickerResponse CoinbaseApi::GetTickerInfo(String tickerId) {
+CBPTickerResponse CoinbaseApi::GetTickerInfo(String &tickerId) {
   
   // https://api.exchange.coinbase.com/products/btc-eur/ticker  
   String commandTicker="/products/" + tickerId + "/ticker";
   
   String responseTicker = SendGetToCoinbase(commandTicker);
-  Serial.println(String(tickerId) + " ticker: " + String(responseTicker));
+  Serial.print(tickerId); 
+  Serial.print(F(" ticker: "));
+  Serial.println(responseTicker);
   
-  StaticJsonDocument<256> ticker;
+  StaticJsonDocument<384> ticker;
   
   // Deserialize the JSON document
   DeserializationError errorTicker = deserializeJson(ticker, responseTicker);
@@ -103,15 +105,17 @@ CBPTickerResponse CoinbaseApi::GetTickerInfo(String tickerId) {
   return responseTickerObject;
 }
 
-CBPStatsResponse CoinbaseApi::GetStatsInfo(String tickerId) {
+CBPStatsResponse CoinbaseApi::GetStatsInfo(String &tickerId) {
 
   // https://api.exchange.coinbase.com/products/btc-eur/stats
   String commandStats="/products/" + tickerId + "/stats";
   
   String responseStats = SendGetToCoinbase(commandStats);
-  Serial.println(String(tickerId) + " stats: " + String(responseStats));
+  Serial.print(tickerId);
+  Serial.print(" stats: ");
+  Serial.println(responseStats);
   
-  StaticJsonDocument<256> stats;
+  StaticJsonDocument<512> stats;
   
   // Deserialize the JSON document
   DeserializationError errorStats = deserializeJson(stats, responseStats);
@@ -129,19 +133,21 @@ CBPStatsResponse CoinbaseApi::GetStatsInfo(String tickerId) {
   responseStatsObject.open = stats["open"].as<float>();
   responseStatsObject.high = stats["high"].as<float>();
   responseStatsObject.low = stats["low"].as<float>();
-  responseStatsObject.volume_24h = stats["volume"].as<float>();
-  responseStatsObject.volume_30day = stats["volume_30day"].as<float>();
   responseStatsObject.error = "";
  
   return responseStatsObject;
 }
 
-CBPCandlesResponse CoinbaseApi::GetCandlesInfo(String tickerId, String date) {
+CBPCandlesResponse CoinbaseApi::GetCandlesInfo(String &tickerId, String &date) {
   // https://api.exchange.coinbase.com/products/btc-eur/candles?granularity=86400&start=2021-01-01&end=2021-01-01
   String commandCandles="/products/" + tickerId + "/candles?granularity=86400&start=" + date + "&end=" + date;
   
   String responseCandles = SendGetToCoinbase(commandCandles);
-  Serial.println(String(tickerId) + " candles " + date +": " + String(responseCandles));
+  Serial.print(tickerId);
+  Serial.print(F(" candles "));
+  Serial.print(date);
+  Serial.print(F(": "));
+  Serial.println(responseCandles);
 
   StaticJsonDocument<256> candles;
 

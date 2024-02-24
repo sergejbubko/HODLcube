@@ -35,8 +35,6 @@ struct CBPStatsResponse{
   float open;
   float high;
   float low;
-  float volume_24h;
-  float volume_30day;
   String error;
 };
 
@@ -50,10 +48,10 @@ class CoinbaseApi
 {
   public:
     CoinbaseApi (WiFiClientSecure &client);
-    String SendGetToCoinbase(String command);
-    CBPTickerResponse GetTickerInfo(String coinId);
-    CBPStatsResponse GetStatsInfo(String coinId);
-    CBPCandlesResponse GetCandlesInfo(String tickerId, String date);
+    String SendGetToCoinbase(String &command);
+    CBPTickerResponse GetTickerInfo(String &coinId);
+    CBPStatsResponse GetStatsInfo(String &coinId);
+    CBPCandlesResponse GetCandlesInfo(String &tickerId, String &date);
     int Port = 443;
 
   private:
